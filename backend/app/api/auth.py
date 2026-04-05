@@ -86,12 +86,9 @@ async def login(
 
     ip = request.client.host if request.client else "unknown"
 
-    from sqlalchemy import text
-result = await db.execute(
-    text("SELECT * FROM utilisateurs WHERE email = :email"),
-    {"email": email}
+    user = await db.fetchrow(
+    "SELECT * FROM utilisateurs WHERE email = $1", email
 )
-user = result.fetchone()
 
     err_neutre = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
