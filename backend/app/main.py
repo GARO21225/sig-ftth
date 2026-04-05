@@ -1,10 +1,3 @@
-"""
-main.py — FastAPI SIG FTTH v6.1
-Corrections Railway :
-  - Import modules vides protégés par try/except
-  - CORS étendu
-  - Healthcheck robuste
-"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -15,30 +8,29 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.redis import init_redis
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s — %(levelname)s — %(message)s"
-)
+logging.basicConfig(level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s")
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 SIG FTTH v6.1 démarrage sur Railway...")
+    logger.info("🚀 SIG FTTH v6.1 démarrage Railway...")
+    logger.info(f"🌐 CORS: {settings.CORS_ORIGINS_LIST}")
     try:
         await init_db()
     except Exception as e:
-        logger.error(f"❌ Erreur DB: {e} — L'app démarre quand même")
+        logger.error(f"❌ DB init: {e} — L'app continue")
     try:
         await init_redis()
     except Exception as e:
         logger.warning(f"⚠️ Redis ignoré: {e}")
-    logger.info("✅ Application prête !")
+    logger.info("✅ Prêt !")
     yield
     logger.info("🛑 Arrêt...")
 
 app = FastAPI(
     title="SIG FTTH API",
-    description="API SIG Web FTTH v6.1 — Réseau Fibre Optique & Génie Civil",
+    description="API SIG Web FTTH v6.1",
     version="6.1.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -46,34 +38,16 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
-# CORS robuste
-cors_origins = list(settings.ALLOWED_ORIGINS) if isinstance(
-    settings.ALLOWED_ORIGINS, list
-) else [settings.ALLOWED_ORIGINS]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.CORS_ORIGINS_LIST,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
 
-# ── Imports protégés (modules potentiellement vides) ─────────
-def _safe_include(router_path: str, prefix: str, tags: list):
-    """Import un router sans crasher si le module est vide."""
-    try:
-        parts = router_path.rsplit(".", 1)
-        module = __import__(parts[0], fromlist=[parts[1]])
-        router = getattr(module, parts[1])
-        app.include_router(router, prefix=prefix, tags=tags)
-        logger.info(f"✅ Router chargé : {router_path}")
-    except (ImportError, AttributeError) as e:
-        logger.warning(f"⚠️ Router ignoré ({router_path}): {e}")
-
-# Modules complets (chargement direct)
+# Imports directs
 from app.api import auth
 app.include_router(auth.router, prefix="/auth", tags=["🔐 Auth"])
 
@@ -107,38 +81,38 @@ app.include_router(travaux.router, prefix="/api/v1", tags=["🏗️ Travaux"])
 from app.api import websocket
 app.include_router(websocket.router, tags=["🔌 WebSocket"])
 
-# Modules vides → chargement protégé
-_safe_include("app.api.equipements.router",  "/api/v1", ["📦 Équipements"])
-_safe_include("app.api.catalogue.router",    "/api/v1", ["📋 Catalogue"])
-_safe_include("app.api.import_dwg.router",   "/api/v1", ["📥 Import DWG"])
-_safe_include("app.api.itineraires.router",  "/api/v1", ["🧭 Itinéraires"])
+# Modules stubs — import protégé
+import importlib
+for mod_name, prefix, tags in [
+    ("app.api.equipements",  "/api/v1", ["📦 Équipements"]),
+    ("app.api.catalogue",    "/api/v1", ["📋 Catalogue"]),
+    ("app.api.import_dwg",   "/api/v1", ["📥 Import DWG"]),
+    ("app.api.itineraires",  "/api/v1", ["🧭 Itinéraires"]),
+]:
+    try:
+        mod = importlib.import_module(mod_name)
+        app.include_router(mod.router, prefix=prefix, tags=tags)
+    except Exception as e:
+        logger.warning(f"⚠️ {mod_name} ignoré: {e}")
 
-# ── Routes système ───────────────────────────────────────────
 @app.get("/health", tags=["⚙️ Système"])
 async def health():
+    from sqlalchemy import text
     from app.core.database import engine
     db_ok = False
     try:
         async with engine.connect() as conn:
-            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+            await conn.execute(text("SELECT 1"))
         db_ok = True
     except Exception as e:
-        logger.warning(f"DB health check failed: {e}")
-
+        logger.warning(f"DB health: {e}")
     return {
         "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
         "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
         "database": "connected" if db_ok else "error",
-        "railway": True,
     }
 
 @app.get("/", tags=["⚙️ Système"])
 async def root():
-    return {
-        "message": "SIG FTTH API v6.1",
-        "docs": "/docs",
-        "health": "/health",
-        "frontend": "https://garo21225.github.io/sig-ftth/",
-    }
+    return {"message": "SIG FTTH API v6.1", "docs": "/docs", "health": "/health"}

@@ -387,7 +387,7 @@
 
       try {
         // Appel API JWT réel → Railway
-        const RAILWAY = 'https://sig-ftth-production.up.railway.app'
+        const RAILWAY = 'https://sig-ftth-production-a3aa.up.railway.app'
         const apiBase = isPages || !isLocal ? RAILWAY : 'http://localhost:8000'
         const res = await fetch(`${apiBase}/auth/login`, {
           method: 'POST',

@@ -3,14 +3,18 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ libpq-dev libgeos-dev libproj-dev curl \
+    gcc g++ libpq-dev libgeos-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 RUN mkdir -p /app/uploads /app/logs
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Script shell dédié → $PORT évalué au runtime
+RUN printf '#!/bin/sh\nexec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1\n' \
+    > /app/start.sh && chmod +x /app/start.sh
+
+CMD ["/app/start.sh"]

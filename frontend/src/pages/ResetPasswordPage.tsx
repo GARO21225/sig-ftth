@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
-const API = import.meta.env.VITE_API_URL || 'https://sig-ftth-production.up.railway.app'
+const API = import.meta.env.VITE_API_URL || 'https://sig-ftth-production-a3aa.up.railway.app'
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
