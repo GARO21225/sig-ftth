@@ -1,18 +1,18 @@
 """
 config.py — Configuration Railway-compatible
 Problèmes résolus :
-  1. ALLOWED_ORIGINS : List[str] → pydantic attend du JSON, Railway envoie une string
-     → On utilise un validator qui accepte les deux formats
+  1. ALLOWED_ORIGINS : déclaré comme str pour éviter que Pydantic v2 tente
+     de coercer la valeur brute de l'env var avant le validator.
+     La propriété `allowed_origins_list` expose la liste parsée pour CORS.
   2. DATABASE_URL : Railway envoie postgres:// → on convertit pour asyncpg
   3. REDIS_URL vide → Redis optionnel, pas de crash
   4. SECRET_KEY trop courte → validation minimale
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import field_validator, model_validator
-from typing import List, Union
+from pydantic import field_validator
+from typing import List
 import json
-import os
 
 
 class Settings(BaseSettings):
@@ -38,15 +38,18 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 300
 
     # ── CORS ─────────────────────────────────────────────────
-    # IMPORTANT Railway : mettre la valeur EN JSON dans la variable
-    # Exemple : ["https://garo21225.github.io","http://localhost:3000"]
-    # OU laisser vide → les origines par défaut s'appliquent
-    ALLOWED_ORIGINS: Union[List[str], str] = [
-        "https://garo21225.github.io",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-    ]
+    # Déclaré comme str pour éviter que Pydantic v2 tente de coercer
+    # la valeur brute de l'env var avant que le validator ne s'exécute.
+    # Formats acceptés dans la variable Railway ALLOWED_ORIGINS :
+    #   JSON array : ["https://garo21225.github.io","http://localhost:3000"]
+    #   CSV string : https://garo21225.github.io,http://localhost:3000
+    #   Vide       → origines par défaut s'appliquent
+    ALLOWED_ORIGINS: str = (
+        "https://garo21225.github.io,"
+        "http://localhost:3000,"
+        "http://localhost:5173,"
+        "http://127.0.0.1:3000"
+    )
 
     # ── Email ────────────────────────────────────────────────
     SMTP_HOST: str = "smtp.gmail.com"
@@ -70,34 +73,37 @@ class Settings(BaseSettings):
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def parse_allowed_origins(cls, v):
+    def normalise_allowed_origins(cls, v) -> str:
         """
-        Accepte 3 formats possibles depuis Railway :
+        Normalise ALLOWED_ORIGINS en une chaîne CSV.
+        Accepte 3 formats depuis Railway :
           1. JSON array  : ["https://x.com","http://localhost:3000"]
           2. CSV string  : https://x.com,http://localhost:3000
-          3. Liste Python déjà parsée
+          3. Liste Python (passage interne)
+        Retourne toujours une str CSV pour correspondre au type du champ.
         """
+        default = (
+            "https://garo21225.github.io,"
+            "http://localhost:3000,"
+            "http://localhost:5173,"
+            "http://127.0.0.1:3000"
+        )
         if isinstance(v, list):
-            return v
+            return ",".join(str(o).strip() for o in v if str(o).strip())
         if isinstance(v, str):
             v = v.strip()
             if not v:
-                # Vide → origines par défaut
-                return [
-                    "https://garo21225.github.io",
-                    "http://localhost:3000",
-                    "http://localhost:5173",
-                ]
+                return default
             # Tenter JSON d'abord
             try:
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
-                    return parsed
-            except json.JSONDecodeError:
+                    return ",".join(str(o).strip() for o in parsed if str(o).strip())
+            except (json.JSONDecodeError, ValueError):
                 pass
-            # Sinon CSV
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+            # Sinon déjà CSV — retourner tel quel
+            return v
+        return default
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
@@ -127,14 +133,18 @@ class Settings(BaseSettings):
             return new_key
         return v
 
-    @model_validator(mode="after")
-    def validate_all(self):
-        """Ajouter Railway URL elle-même dans les origines autorisées."""
+    # ─────────────────────────────────────────────────────────
+    # PROPRIÉTÉS CALCULÉES
+    # ─────────────────────────────────────────────────────────
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        """Retourne ALLOWED_ORIGINS parsé en liste, prêt pour CORSMiddleware."""
         railway_url = "https://sig-ftth-production.up.railway.app"
-        origins = self.ALLOWED_ORIGINS
-        if isinstance(origins, list) and railway_url not in origins:
+        origins = [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        if railway_url not in origins:
             origins.append(railway_url)
-        return self
+        return origins
 
     # Propriété pour accéder à l'URL asyncpg (déjà corrigée par validator)
     @property

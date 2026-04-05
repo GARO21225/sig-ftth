@@ -47,14 +47,10 @@ app = FastAPI(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS robuste
-cors_origins = list(settings.ALLOWED_ORIGINS) if isinstance(
-    settings.ALLOWED_ORIGINS, list
-) else [settings.ALLOWED_ORIGINS]
-
+# CORS — utilise la propriété parsée (toujours une List[str])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
