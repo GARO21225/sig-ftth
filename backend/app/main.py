@@ -1,3 +1,10 @@
+"""
+main.py — FastAPI SIG FTTH v6.1
+Corrections Railway :
+  - Import modules vides protégés par try/except
+  - CORS étendu
+  - Healthcheck robuste
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -16,9 +23,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 SIG FTTH v6.1 démarrage...")
-    await init_db()
-    await init_redis()
+    logger.info("🚀 SIG FTTH v6.1 démarrage sur Railway...")
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"❌ Erreur DB: {e} — L'app démarre quand même")
+    try:
+        await init_redis()
+    except Exception as e:
+        logger.warning(f"⚠️ Redis ignoré: {e}")
     logger.info("✅ Application prête !")
     yield
     logger.info("🛑 Arrêt...")
@@ -34,55 +47,91 @@ app = FastAPI(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS — autoriser GitHub Pages + local
-origins = settings.ALLOWED_ORIGINS + [
-    "https://sig-ftth-production.up.railway.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-]
+# CORS robuste
+cors_origins = list(settings.ALLOWED_ORIGINS) if isinstance(
+    settings.ALLOWED_ORIGINS, list
+) else [settings.ALLOWED_ORIGINS]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],  # Pour les exports fichiers
+    expose_headers=["Content-Disposition"],
 )
 
-from app.api import (
-    auth, noeuds_telecom, noeuds_gc,
-    liens_telecom, liens_gc, logements,
-    equipements, catalogue, import_dwg,
-    itineraires, travaux, dashboard,
-    export, eligibilite, websocket
-)
+# ── Imports protégés (modules potentiellement vides) ─────────
+def _safe_include(router_path: str, prefix: str, tags: list):
+    """Import un router sans crasher si le module est vide."""
+    try:
+        parts = router_path.rsplit(".", 1)
+        module = __import__(parts[0], fromlist=[parts[1]])
+        router = getattr(module, parts[1])
+        app.include_router(router, prefix=prefix, tags=tags)
+        logger.info(f"✅ Router chargé : {router_path}")
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"⚠️ Router ignoré ({router_path}): {e}")
 
-app.include_router(auth.router,           prefix="/auth",    tags=["🔐 Auth"])
-app.include_router(noeuds_telecom.router, prefix="/api/v1",  tags=["📡 Noeuds Télécom"])
-app.include_router(noeuds_gc.router,      prefix="/api/v1",  tags=["🏗️ Noeuds GC"])
-app.include_router(liens_telecom.router,  prefix="/api/v1",  tags=["〰️ Liens Télécom"])
-app.include_router(liens_gc.router,       prefix="/api/v1",  tags=["⚡ Liens GC"])
-app.include_router(logements.router,      prefix="/api/v1",  tags=["🏠 Logements"])
-app.include_router(equipements.router,    prefix="/api/v1",  tags=["📦 Équipements"])
-app.include_router(catalogue.router,      prefix="/api/v1",  tags=["📋 Catalogue"])
-app.include_router(import_dwg.router,     prefix="/api/v1",  tags=["📥 Import DWG"])
-app.include_router(itineraires.router,    prefix="/api/v1",  tags=["🧭 Itinéraires"])
-app.include_router(travaux.router,        prefix="/api/v1",  tags=["🏗️ Travaux"])
-app.include_router(dashboard.router,      prefix="/api/v1",  tags=["📊 Dashboard"])
-app.include_router(export.router,         prefix="/api/v1",  tags=["📤 Export"])
-app.include_router(eligibilite.router,    prefix="/api/v1",  tags=["💼 Éligibilité"])
-app.include_router(websocket.router,                         tags=["🔌 WebSocket"])
+# Modules complets (chargement direct)
+from app.api import auth
+app.include_router(auth.router, prefix="/auth", tags=["🔐 Auth"])
 
+from app.api import dashboard
+app.include_router(dashboard.router, prefix="/api/v1", tags=["📊 Dashboard"])
+
+from app.api import export
+app.include_router(export.router, prefix="/api/v1", tags=["📤 Export"])
+
+from app.api import eligibilite
+app.include_router(eligibilite.router, prefix="/api/v1", tags=["💼 Éligibilité"])
+
+from app.api import noeuds_telecom
+app.include_router(noeuds_telecom.router, prefix="/api/v1", tags=["📡 Noeuds Télécom"])
+
+from app.api import noeuds_gc
+app.include_router(noeuds_gc.router, prefix="/api/v1", tags=["🏗️ Noeuds GC"])
+
+from app.api import liens_telecom
+app.include_router(liens_telecom.router, prefix="/api/v1", tags=["〰️ Liens Télécom"])
+
+from app.api import liens_gc
+app.include_router(liens_gc.router, prefix="/api/v1", tags=["⚡ Liens GC"])
+
+from app.api import logements
+app.include_router(logements.router, prefix="/api/v1", tags=["🏠 Logements"])
+
+from app.api import travaux
+app.include_router(travaux.router, prefix="/api/v1", tags=["🏗️ Travaux"])
+
+from app.api import websocket
+app.include_router(websocket.router, tags=["🔌 WebSocket"])
+
+# Modules vides → chargement protégé
+_safe_include("app.api.equipements.router",  "/api/v1", ["📦 Équipements"])
+_safe_include("app.api.catalogue.router",    "/api/v1", ["📋 Catalogue"])
+_safe_include("app.api.import_dwg.router",   "/api/v1", ["📥 Import DWG"])
+_safe_include("app.api.itineraires.router",  "/api/v1", ["🧭 Itinéraires"])
+
+# ── Routes système ───────────────────────────────────────────
 @app.get("/health", tags=["⚙️ Système"])
 async def health():
+    from app.core.database import engine
+    db_ok = False
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.warning(f"DB health check failed: {e}")
+
     return {
-        "status": "ok",
+        "status": "ok" if db_ok else "degraded",
         "app": settings.APP_NAME,
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
-        "railway": True
+        "database": "connected" if db_ok else "error",
+        "railway": True,
     }
 
 @app.get("/", tags=["⚙️ Système"])
@@ -90,5 +139,6 @@ async def root():
     return {
         "message": "SIG FTTH API v6.1",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "frontend": "https://garo21225.github.io/sig-ftth/",
     }

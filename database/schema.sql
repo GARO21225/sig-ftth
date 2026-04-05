@@ -4,7 +4,7 @@
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS pgrouting;
+-- CREATE EXTENSION IF NOT EXISTS pgrouting; -- Optionnel, pas dispo sur Railway
 
 -- ============================================
 -- MODULE 1 : AUTHENTIFICATION
