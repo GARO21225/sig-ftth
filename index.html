@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIG FTTH — Connexion</title>
+  <meta name="description" content="SIG Web FTTH — Authentification" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #030712;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Fond animé */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 80% at 50% -20%, rgba(29,78,216,0.25) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 80% 100%, rgba(99,102,241,0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(30,41,59,0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(30,41,59,0.4) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 420px;
+      padding: 1.5rem;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    /* Logo + titre */
+    .brand {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .logo {
+      width: 72px; height: 72px;
+      background: linear-gradient(135deg, #1d4ed8 0%, #6366f1 100%);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.2rem;
+      margin: 0 auto 1rem;
+      box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 16px 48px rgba(29,78,216,0.4);
+    }
+    .brand h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff 0%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.03em;
+    }
+    .brand p {
+      font-size: 0.78rem;
+      color: #475569;
+      margin-top: 0.25rem;
+    }
+
+    /* Carte login */
+    .card {
+      background: rgba(15,23,42,0.85);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(30,41,59,0.9);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Champs */
+    .field {
+      margin-bottom: 1.1rem;
+    }
+    .field label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #64748b;
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .field input {
+      width: 100%;
+      background: rgba(2,6,23,0.6);
+      border: 1px solid rgba(51,65,85,0.8);
+      border-radius: 10px;
+      padding: 0.7rem 1rem;
+      font-size: 0.9rem;
+      color: #e2e8f0;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus {
+      border-color: rgba(59,130,246,0.7);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+    .field input::placeholder { color: #334155; }
+
+    /* Message d'erreur */
+    .error-msg {
+      display: none;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px;
+      padding: 0.65rem 1rem;
+      font-size: 0.8rem;
+      color: #fca5a5;
+      margin-bottom: 1rem;
+    }
+
+    /* Message serveur */
+    .server-msg {
+      display: none;
+      background: rgba(251,191,36,0.08);
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      color: #fcd34d;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .server-msg code {
+      display: inline-block;
+      background: rgba(0,0,0,0.3);
+      border-radius: 5px;
+      padding: 0.1rem 0.4rem;
+      font-family: monospace;
+      color: #34d399;
+      margin-top: 0.3rem;
+    }
+
+    /* Bouton */
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #1d4ed8, #6366f1);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.8rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(29,78,216,0.4);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(29,78,216,0.6); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* Spinner */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    /* Lien mot de passe oublié */
+    .forgot {
+      text-align: right;
+      margin-top: 0.4rem;
+    }
+    .forgot a {
+      font-size: 0.75rem;
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .forgot a:hover { text-decoration: underline; }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.7rem;
+      color: #1e293b;
+    }
+
+    /* Rôles disponibles */
+    .roles-hint {
+      margin-top: 1.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(30,41,59,0.8);
+    }
+    .roles-hint p {
+      font-size: 0.7rem;
+      color: #334155;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .role-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .role-pill {
+      font-size: 0.68rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(51,65,85,0.6);
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: transparent;
+    }
+    .role-pill:hover {
+      border-color: rgba(59,130,246,0.4);
+      color: #93c5fd;
+      background: rgba(59,130,246,0.05);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="logo">🗺️</div>
+      <h1>SIG FTTH</h1>
+      <p>Système d'Information Géographique · v6.1.0</p>
+    </div>
+
+    <!-- Carte connexion -->
+    <div class="card">
+      <h2>🔐 Connexion</h2>
+
+      <div class="error-msg" id="error-msg"></div>
+      <div class="server-msg" id="server-msg"></div>
+
+      <div class="field">
+        <label>Adresse e-mail</label>
+        <input
+          type="email"
+          id="email"
+          placeholder="admin@sig-ftth.ci"
+          autocomplete="email"
+        />
+      </div>
+
+      <div class="field">
+        <label>Mot de passe</label>
+        <input
+          type="password"
+          id="password"
+          placeholder="••••••••"
+          autocomplete="current-password"
+        />
+        <div class="forgot">
+          <a href="#" onclick="motDePasseOublie(event)">
+            Mot de passe oublié ?
+          </a>
+        </div>
+      </div>
+
+      <button class="btn" id="btn-login" onclick="seConnecter()">
+        <span class="spinner" id="spinner"></span>
+        <span id="btn-label">Se connecter</span>
+      </button>
+
+      <!-- Rôles disponibles (aide dev) -->
+      <div class="roles-hint">
+        <p>Connexion rapide (dev)</p>
+        <div class="role-pills">
+          <button class="role-pill" onclick="remplir('admin@sig-ftth.ci','Admin@1234')">👑 Admin</button>
+          <button class="role-pill" onclick="remplir('chef@sig-ftth.ci','Chef@1234')">📋 Chef projet</button>
+          <button class="role-pill" onclick="remplir('tech@sig-ftth.ci','Tech@1234')">🔧 Technicien</button>
+          <button class="role-pill" onclick="remplir('analyste@sig-ftth.ci','Ana@1234')">📊 Analyste</button>
+          <button class="role-pill" onclick="remplir('invite@sig-ftth.ci','Invite@1')">👁️ Invité</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer">SIG FTTH — PCR v2.5 · Abidjan, Côte d'Ivoire</p>
+  </div>
+
+  <script>
+    // ── Remplissage rapide rôles ─────────────────────
+    function remplir(email, mdp) {
+      document.getElementById('email').value = email;
+      document.getElementById('password').value = mdp;
+      document.getElementById('email').focus();
+    }
+
+    // ── Connexion ────────────────────────────────────
+    async function seConnecter() {
+      const email    = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const errEl    = document.getElementById('error-msg');
+      const srvEl    = document.getElementById('server-msg');
+      const btn      = document.getElementById('btn-login');
+      const spinner  = document.getElementById('spinner');
+      const label    = document.getElementById('btn-label');
+
+      // Reset
+      errEl.style.display = 'none';
+      srvEl.style.display = 'none';
+
+      // Validation basique
+      if (!email) {
+        showError('Veuillez saisir votre adresse e-mail.'); return;
+      }
+      if (!password) {
+        showError('Veuillez saisir votre mot de passe.'); return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('Adresse e-mail invalide.'); return;
+      }
+
+      // UI chargement
+      btn.disabled   = true;
+      spinner.style.display = 'block';
+      label.textContent = 'Connexion…';
+
+      // Détecter le contexte
+      const isFile   = window.location.href.startsWith('file://');
+      const isLocal  = window.location.hostname === 'localhost'
+                    || window.location.hostname === '127.0.0.1';
+      const isPages  = window.location.hostname.includes('github.io')
+                    || window.location.hostname.includes('.app.github.dev');
+      const basePath = isPages ? '/sig-ftth' : '';
+
+      if (isFile) {
+        // Mode fichier local — pas d'API disponible
+        await sleep(800);
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        label.textContent = 'Se connecter';
+        srvEl.innerHTML = `
+          ⚠️ <strong>Serveur non démarré</strong><br>
+          L'authentification nécessite le backend FastAPI.<br>
+          Lance le serveur puis accède à :<br>
+          <code>http://localhost:3000</code>
+          <br><br>
+          <strong>Commandes :</strong><br>
+          <code>cd frontend && npm run dev</code>
+        `;
+        srvEl.style.display = 'block';
+        return;
+      }
+
+      try {
+        // Appel API JWT réel → Railway
+        const RAILWAY = 'https://sig-ftth-production.up.railway.app'
+        const apiBase = isPages || !isLocal ? RAILWAY : 'http://localhost:8000'
+        const res = await fetch(`${apiBase}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, mot_de_passe: password }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.access_token) {
+          // Stocker le token
+          localStorage.setItem('access_token',  data.access_token);
+          localStorage.setItem('refresh_token', data.refresh_token || '');
+          localStorage.setItem('user',           JSON.stringify(data.utilisateur || {}));
+          // Rediriger vers l'app React
+          if (isLocal) {
+            window.location.href = 'http://localhost:3000';
+          } else {
+            window.location.href = basePath + '/map';
+          }
+        } else {
+          showError(data.detail || 'Email ou mot de passe incorrect.');
+        }
+      } catch (err) {
+        showError('Impossible de joindre le serveur. Vérifiez que FastAPI tourne sur le port 8000.');
+      } finally {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        label.textContent = 'Se connecter';
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = '⚠️ ' + msg;
+      el.style.display = 'block';
+    }
+
+    function sleep(ms) {
+      return new Promise(r => setTimeout(r, ms));
+    }
+
+    function motDePasseOublie(e) {
+      e.preventDefault();
+      const isLocal = window.location.hostname === 'localhost';
+      if (isLocal) {
+        window.location.href = 'http://localhost:3000/mot-de-passe-oublie';
+      } else {
+        showError('Fonctionnalité disponible une fois le serveur démarré.');
+      }
+    }
+
+    // Enter pour soumettre
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') seConnecter();
+    });
+  </script>
+</body>
+</html>
