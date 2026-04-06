@@ -15,7 +15,7 @@ from app.core.config import settings
 router = APIRouter()
 
 # ─────────────────────────────────────────────
-# SCHEMAS — email: str (EmailStr supprimé → pas de email-validator requis)
+# SCHEMAS
 # ─────────────────────────────────────────────
 
 class LoginSchema(BaseModel):
@@ -86,8 +86,9 @@ async def login(
 
     ip = request.client.host if request.client else "unknown"
 
+    # ✅ CORRIGÉ : utilisateurs (pluriel)
     user = await db.fetchrow(
-        "SELECT * FROM utilisateur WHERE email = $1",
+        "SELECT * FROM utilisateurs WHERE email = $1",
         data.email
     )
 
@@ -107,7 +108,7 @@ async def login(
             user['id'] if user else None,
             data.email, succes, motif, ip)
         except Exception:
-            pass  # Ne pas crasher si la table n'existe pas encore
+            pass
 
     if not user:
         await journaliser(False, 'compte_inexistant')
@@ -120,14 +121,17 @@ async def login(
             detail="Compte désactivé"
         )
 
-    if user['compte_verrouille']:
+    # ✅ CORRIGÉ : compte_verrouille peut ne pas exister
+    compte_verrouille = user.get('compte_verrouille', False)
+    if compte_verrouille:
         await journaliser(False, 'compte_verrouille')
         raise HTTPException(
             status_code=423,
-            detail="Compte verrouillé après 5 tentatives. Réinitialisez votre mot de passe."
+            detail="Compte verrouillé après 5 tentatives."
         )
 
-    if not verifier_mdp(data.mot_de_passe, user['mot_de_passe_hash']):
+    # ✅ CORRIGÉ : mot_de_passe (pas mot_de_passe_hash)
+    if not verifier_mdp(data.mot_de_passe, user['mot_de_passe']):
         await journaliser(False, 'mdp_incorrect')
         raise err_neutre
 
@@ -182,11 +186,12 @@ async def mot_de_passe_oublie(
     db=Depends(get_db)
 ):
     msg_neutre = {
-        "message": "Si cet email existe, vous recevrez un lien de réinitialisation sous peu."
+        "message": "Si cet email existe, vous recevrez un lien de réinitialisation."
     }
     try:
+        # ✅ CORRIGÉ : utilisateurs (pluriel)
         user = await db.fetchrow(
-            "SELECT id, nom, prenom, email, actif FROM utilisateur WHERE email = $1",
+            "SELECT id, nom, prenom, email, actif FROM utilisateurs WHERE email = $1",
             data.email
         )
         if not user or not user['actif']:
@@ -215,9 +220,9 @@ async def reinitialiser_mdp(
     db=Depends(get_db)
 ):
     token_data = await db.fetchrow("""
-        SELECT t.*, u.id as user_id, u.email, u.mot_de_passe_hash
+        SELECT t.*, u.id as user_id, u.email, u.mot_de_passe
         FROM token_reinitialisation t
-        JOIN utilisateur u ON u.id = t.id_utilisateur
+        JOIN utilisateurs u ON u.id = t.id_utilisateur
         WHERE t.token = $1 AND t.type_token = 'reset_mdp'
         AND t.utilise = FALSE AND t.date_expiration > NOW()
     """, data.token)
@@ -233,10 +238,12 @@ async def reinitialiser_mdp(
         raise HTTPException(400, str(validation['erreurs']))
 
     nouveau_hash = hasher_mdp(data.nouveau_mdp)
+
+    # ✅ CORRIGÉ : utilisateurs + mot_de_passe
     await db.execute("""
-        UPDATE utilisateur
-        SET mot_de_passe_hash = $1, nb_tentatives_echec = 0,
-            compte_verrouille = FALSE, date_modification = NOW()
+        UPDATE utilisateurs
+        SET mot_de_passe = $1,
+            date_modification = NOW()
         WHERE id = $2
     """, nouveau_hash, token_data['user_id'])
 
@@ -246,7 +253,7 @@ async def reinitialiser_mdp(
         WHERE token = $1
     """, data.token)
 
-    return {"message": "Mot de passe réinitialisé avec succès. Vous pouvez vous connecter."}
+    return {"message": "Mot de passe réinitialisé avec succès."}
 
 # ─────────────────────────────────────────────
 # ENDPOINT : Refresh Token
@@ -261,16 +268,22 @@ async def refresh_token(
         SELECT s.*, u.id as user_id, u.email, u.role,
                u.nom, u.prenom, u.actif
         FROM session_utilisateur s
-        JOIN utilisateur u ON u.id = s.id_utilisateur
+        JOIN utilisateurs u ON u.id = s.id_utilisateur
         WHERE s.refresh_token = $1
         AND s.active = TRUE AND s.date_expiration > NOW()
     """, data.refresh_token)
 
     if not session:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expirée. Reconnectez-vous.")
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Session expirée. Reconnectez-vous."
+        )
 
     if not session['actif']:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Compte désactivé.")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Compte désactivé."
+        )
 
     access_token = creer_access_token({
         "sub": str(session['user_id']),
@@ -310,10 +323,11 @@ async def get_me(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
+    # ✅ CORRIGÉ : utilisateurs (pluriel) + mot_de_passe retiré
     user = await db.fetchrow("""
-        SELECT id, email, nom, prenom, role, langue, actif,
-               date_derniere_connexion, date_creation
-        FROM utilisateur WHERE id = $1
+        SELECT id, email, nom, prenom, role, actif,
+               date_creation
+        FROM utilisateurs WHERE id = $1
     """, current_user['sub'])
 
     if not user:
