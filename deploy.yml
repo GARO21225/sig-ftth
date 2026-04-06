@@ -1,102 +1,37 @@
-version: '3.9'
+name: Deploy Frontend to GitHub Pages
 
-services:
+on:
+  push:
+    branches: [main]
 
-  # ─────────────────────────────────────────
-  # BASE DE DONNÉES PostgreSQL + PostGIS
-  # ─────────────────────────────────────────
-  db:
-    image: postgis/postgis:15-3.3
-    container_name: sig_ftth_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: sig_ftth
-      POSTGRES_USER: sig_user
-      POSTGRES_PASSWORD: sig_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
-      - ./database/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL",
-             "pg_isready -U sig_user -d sig_ftth"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # ─────────────────────────────────────────
-  # REDIS Cache
-  # ─────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: sig_ftth_redis
-    restart: unless-stopped
-    command: redis-server --requirepass redis_password
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli",
-             "-a", "redis_password", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-  # ─────────────────────────────────────────
-  # BACKEND FastAPI
-  # ─────────────────────────────────────────
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: sig_ftth_backend
-    restart: unless-stopped
-    environment:
-      ENVIRONMENT: development
-      SECRET_KEY: change-me-super-secret-key-32chars
-      DATABASE_URL: postgresql+asyncpg://sig_user:sig_password@db:5432/sig_ftth
-      REDIS_URL: redis://:redis_password@redis:6379/0
-      ALLOWED_ORIGINS: '["http://localhost:3000","http://localhost:80"]'
-    volumes:
-      - ./backend:/app
-      - uploads_data:/app/uploads
-    ports:
-      - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      uvicorn app.main:app
-      --host 0.0.0.0
-      --port 8000
-      --reload
+      - name: Install dependencies
+        run: npm install
+        working-directory: ./frontend
 
-  # ─────────────────────────────────────────
-  # FRONTEND React
-  # ─────────────────────────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: sig_ftth_frontend
-    restart: unless-stopped
-    environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - name: Build
+        run: npm run build
+        working-directory: ./frontend
+        env:
+          GITHUB_PAGES: true
+          VITE_API_URL: https://sig-ftth-production-a3aa.up.railway.app
 
-volumes:
-  postgres_data:
-  redis_data:
-  uploads_data:
+      - name: Copy 404.html
+        run: cp ./frontend/dist/index.html ./frontend/dist/404.html
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend/dist
