@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, get_pool
 from app.core.redis import init_redis
+from scripts.init_users import init_users
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s")
@@ -20,6 +21,11 @@ async def lifespan(app: FastAPI):
         await init_db()
     except Exception as e:
         logger.error(f"❌ DB init: {e} — L'app continue")
+    try:
+        pool = get_pool()
+        await init_users(pool)
+    except Exception as e:
+        logger.error(f"❌ Init utilisateurs: {e} — L'app continue")
     try:
         await init_redis()
     except Exception as e:
