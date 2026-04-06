@@ -57,20 +57,23 @@ app.include_router(dashboard.router, prefix="/api/v1", tags=["📊 Dashboard"])
 from app.api import export
 app.include_router(export.router, prefix="/api/v1", tags=["📤 Export"])
 
-from app.api import eligibilite
-app.include_router(eligibilite.router, prefix="/api/v1", tags=["💼 Éligibilité"])
-
-from app.api import noeuds_telecom
-app.include_router(noeuds_telecom.router, prefix="/api/v1", tags=["📡 Noeuds Télécom"])
-
-from app.api import noeuds_gc
-app.include_router(noeuds_gc.router, prefix="/api/v1", tags=["🏗️ Noeuds GC"])
-
-from app.api import liens_telecom
-app.include_router(liens_telecom.router, prefix="/api/v1", tags=["〰️ Liens Télécom"])
-
-from app.api import liens_gc
-app.include_router(liens_gc.router, prefix="/api/v1", tags=["⚡ Liens GC"])
+@app.get("/health", tags=["⚙️ Système"])
+async def health():
+    from app.core.database import _pool
+    db_ok = False
+    try:
+        if _pool:
+            async with _pool.acquire() as conn:
+                await conn.execute("SELECT 1")
+            db_ok = True
+    except Exception as e:
+        logger.warning(f"DB health: {e}")
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "app": settings.APP_NAME,
+        "version": settings.VERSION,
+        "database": "connected" if db_ok else "error",
+    }
 
 from app.api import logements
 app.include_router(logements.router, prefix="/api/v1", tags=["🏠 Logements"])
