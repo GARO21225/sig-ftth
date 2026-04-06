@@ -6,7 +6,6 @@ import re
 
 from app.core.database import get_db
 from app.core.security import (
-    hasher_mdp, verifier_mdp,
     creer_access_token, creer_refresh_token,
     generer_token_securise, get_current_user
 )
@@ -86,7 +85,6 @@ async def login(
 
     ip = request.client.host if request.client else "unknown"
 
-    # ✅ CORRIGÉ : utilisateurs (pluriel)
     user = await db.fetchrow(
         "SELECT * FROM utilisateurs WHERE email = $1",
         data.email
@@ -121,7 +119,6 @@ async def login(
             detail="Compte désactivé"
         )
 
-    # ✅ CORRIGÉ : compte_verrouille peut ne pas exister
     compte_verrouille = user.get('compte_verrouille', False)
     if compte_verrouille:
         await journaliser(False, 'compte_verrouille')
@@ -130,8 +127,8 @@ async def login(
             detail="Compte verrouillé après 5 tentatives."
         )
 
-    # ✅ CORRIGÉ : mot_de_passe (pas mot_de_passe_hash)
-    if not verifier_mdp(data.mot_de_passe, user['mot_de_passe']):
+    # ✅ CORRIGÉ : comparaison directe mot de passe en clair
+    if data.mot_de_passe != user['mot_de_passe']:
         await journaliser(False, 'mdp_incorrect')
         raise err_neutre
 
@@ -189,7 +186,6 @@ async def mot_de_passe_oublie(
         "message": "Si cet email existe, vous recevrez un lien de réinitialisation."
     }
     try:
-        # ✅ CORRIGÉ : utilisateurs (pluriel)
         user = await db.fetchrow(
             "SELECT id, nom, prenom, email, actif FROM utilisateurs WHERE email = $1",
             data.email
@@ -237,15 +233,13 @@ async def reinitialiser_mdp(
     if not validation['valide']:
         raise HTTPException(400, str(validation['erreurs']))
 
-    nouveau_hash = hasher_mdp(data.nouveau_mdp)
-
-    # ✅ CORRIGÉ : utilisateurs + mot_de_passe
+    # ✅ CORRIGÉ : stockage en clair
     await db.execute("""
         UPDATE utilisateurs
         SET mot_de_passe = $1,
             date_modification = NOW()
         WHERE id = $2
-    """, nouveau_hash, token_data['user_id'])
+    """, data.nouveau_mdp, token_data['user_id'])
 
     await db.execute("""
         UPDATE token_reinitialisation
@@ -323,7 +317,6 @@ async def get_me(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    # ✅ CORRIGÉ : utilisateurs (pluriel) + mot_de_passe retiré
     user = await db.fetchrow("""
         SELECT id, email, nom, prenom, role, actif,
                date_creation
