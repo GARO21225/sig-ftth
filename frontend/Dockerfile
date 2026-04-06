@@ -1,16 +1,33 @@
-FROM node:20-alpine
+# ─── Stage 1 : Build ────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Dépendances
+# Accepter les args de build pour Vite
+ARG VITE_API_URL
+ARG VITE_APP_VERSION=6.1.0
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --prefer-offline
 
-# Code source
 COPY . .
+RUN npm run build
 
-# Port dev
-EXPOSE 3000
+# ─── Stage 2 : Serve avec Nginx ─────────────────────────────────────────────
+FROM nginx:alpine AS production
 
-# Démarrage dev
-CMD ["npm", "run", "dev", "--", "--host"]
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Config nginx SPA légère pour le container frontend seul
+RUN printf 'server {\n\
+    listen 80;\n\
+    root /usr/share/nginx/html;\n\
+    index index.html;\n\
+    location / { try_files $uri $uri/ /index.html; }\n\
+    location ~* \\.(js|css|png|ico|svg|woff2?)$ { expires 1y; add_header Cache-Control public; }\n\
+}\n' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

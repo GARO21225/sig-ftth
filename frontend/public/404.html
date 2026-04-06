@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>SIG FTTH — Redirection</title>
+  <script>
+    // Technique SPA pour GitHub Pages
+    // Sauvegarde l'URL complète dans sessionStorage
+    // puis redirige vers index.html qui la restaure
+    var segmentCount = 1; // /sig-ftth/ = 1 segment
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
+      l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  </script>
+</head>
+<body>
+  <p style="font-family:sans-serif;color:#64748b;text-align:center;padding:3rem">
+    Redirection SIG FTTH...
+  </p>
+</body>
+</html>
