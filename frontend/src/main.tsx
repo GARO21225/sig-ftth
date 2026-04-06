@@ -7,7 +7,7 @@ import './index.css'
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('/sw.js')
+      .register('/sig-ftth/sw.js')
       .then(() => console.log('✅ SW enregistré'))
       .catch(() => console.log('⚠️ SW non disponible'))
   })
