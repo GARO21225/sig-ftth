@@ -13,22 +13,26 @@ MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 async def _table_exists(conn, table_name: str) -> bool:
-    row = await conn.fetchrow(
-        "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
-        "WHERE table_schema='public' AND table_name=$1)",
-        table_name
-    )
-    return row["exists"]
+    """Verifie l'existence reelle via requete directe.
+    information_schema peut mentir sur une table fantome/corrompue."""
+    try:
+        await conn.fetchrow(f"SELECT 1 FROM {table_name} LIMIT 1")
+        return True
+    except asyncpg.exceptions.UndefinedTableError:
+        return False
+    except Exception:
+        return False
 
 
 async def _run_sql_file(conn, filepath: Path):
-    """Exécute un fichier SQL en ignorant les erreurs de duplication."""
+    """Execute un fichier SQL."""
     sql = filepath.read_text(encoding="utf-8")
     try:
         await conn.execute(sql)
-        logger.info(f"✅ SQL exécuté : {filepath.name}")
+        logger.info(f"SQL execute : {filepath.name}")
     except Exception as e:
-        logger.warning(f"⚠️  {filepath.name} partiel : {e}")
+        logger.error(f"Erreur {filepath.name} : {e}")
+        raise
 
 
 async def init_db():
@@ -47,19 +51,17 @@ async def init_db():
         engine = _pool
 
         async with _pool.acquire() as conn:
-            # ── Vérifier si le schéma est initialisé ──────────────────────
             table_ok = await _table_exists(conn, "utilisateur")
 
             if not table_ok:
-                logger.warning("⚠️  Tables absentes — initialisation automatique…")
+                logger.warning("Tables absentes — initialisation automatique")
 
-                # ── Fix Railway : activer PostGIS/uuid-ossp en premier ────
                 try:
                     await conn.execute('CREATE EXTENSION IF NOT EXISTS postgis;')
                     await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-                    logger.info("✅ Extensions PostGIS + uuid-ossp activées")
+                    logger.info("Extensions PostGIS + uuid-ossp activees")
                 except Exception as e:
-                    logger.error(f"❌ Impossible d'activer les extensions : {e}")
+                    logger.error(f"Impossible d'activer les extensions : {e}")
                     raise
 
                 schema_file = MIGRATIONS_DIR / "schema.sql"
@@ -68,28 +70,28 @@ async def init_db():
                 if schema_file.exists():
                     await _run_sql_file(conn, schema_file)
                 else:
-                    logger.error("❌ schema.sql introuvable — chemin attendu : " + str(schema_file))
+                    logger.error(f"schema.sql introuvable : {schema_file}")
                     raise FileNotFoundError(f"schema.sql absent : {schema_file}")
 
                 if seed_file.exists():
                     await _run_sql_file(conn, seed_file)
                 else:
-                    logger.warning("⚠️  seed.sql introuvable")
+                    logger.warning("seed.sql introuvable")
 
-                logger.info("✅ Base de données initialisée avec schéma + seed")
+                logger.info("Base de donnees initialisee avec schema + seed")
             else:
-                logger.info("✅ Tables existantes — pas de migration nécessaire")
+                logger.info("Tables existantes — pas de migration necessaire")
 
-        logger.info("✅ Pool DB prêt")
+        logger.info("Pool DB pret")
 
     except Exception as e:
-        logger.error(f"❌ Erreur init DB: {e}")
+        logger.error(f"Erreur init DB: {e}")
         raise
 
 
 async def get_db():
     if _pool is None:
-        raise RuntimeError("Pool DB non initialisé")
+        raise RuntimeError("Pool DB non initialise")
     async with _pool.acquire() as conn:
         yield conn
 
@@ -99,10 +101,10 @@ async def close_db():
     if _pool is not None:
         await _pool.close()
         _pool = None
-        logger.info("✅ Pool DB fermé")
+        logger.info("Pool DB ferme")
 
 
 def get_pool() -> asyncpg.Pool:
     if _pool is None:
-        raise RuntimeError("Pool DB non initialisé")
+        raise RuntimeError("Pool DB non initialise")
     return _pool
