@@ -1,6 +1,5 @@
 import asyncpg
 import logging
-import os
 from pathlib import Path
 from app.core.config import settings
 
@@ -12,27 +11,10 @@ engine = None
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
-async def _table_exists(conn, table_name: str) -> bool:
-    """Verifie l'existence reelle via requete directe.
-    information_schema peut mentir sur une table fantome/corrompue."""
-    try:
-        await conn.fetchrow(f"SELECT 1 FROM {table_name} LIMIT 1")
-        return True
-    except asyncpg.exceptions.UndefinedTableError:
-        return False
-    except Exception:
-        return False
-
-
 async def _run_sql_file(conn, filepath: Path):
-    """Execute un fichier SQL."""
     sql = filepath.read_text(encoding="utf-8")
-    try:
-        await conn.execute(sql)
-        logger.info(f"SQL execute : {filepath.name}")
-    except Exception as e:
-        logger.error(f"Erreur {filepath.name} : {e}")
-        raise
+    await conn.execute(sql)
+    logger.info(f"SQL execute : {filepath.name}")
 
 
 async def init_db():
@@ -51,38 +33,24 @@ async def init_db():
         engine = _pool
 
         async with _pool.acquire() as conn:
-            table_ok = await _table_exists(conn, "utilisateur")
+            # Extensions (idempotent)
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+            await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+            logger.info("Extensions OK")
 
-            if not table_ok:
-                logger.warning("Tables absentes — initialisation automatique")
-
-                try:
-                    await conn.execute('CREATE EXTENSION IF NOT EXISTS postgis;')
-                    await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-                    logger.info("Extensions PostGIS + uuid-ossp activees")
-                except Exception as e:
-                    logger.error(f"Impossible d'activer les extensions : {e}")
-                    raise
-
-                schema_file = MIGRATIONS_DIR / "schema.sql"
-                seed_file   = MIGRATIONS_DIR / "seed.sql"
-
-                if schema_file.exists():
-                    await _run_sql_file(conn, schema_file)
-                else:
-                    logger.error(f"schema.sql introuvable : {schema_file}")
-                    raise FileNotFoundError(f"schema.sql absent : {schema_file}")
-
-                if seed_file.exists():
-                    await _run_sql_file(conn, seed_file)
-                else:
-                    logger.warning("seed.sql introuvable")
-
-                logger.info("Base de donnees initialisee avec schema + seed")
+            # Schema (idempotent — tous CREATE TABLE IF NOT EXISTS)
+            schema_file = MIGRATIONS_DIR / "schema.sql"
+            if schema_file.exists():
+                await _run_sql_file(conn, schema_file)
             else:
-                logger.info("Tables existantes — pas de migration necessaire")
+                raise FileNotFoundError(f"schema.sql absent : {schema_file}")
 
-        logger.info("Pool DB pret")
+            # Seed (idempotent — tous ON CONFLICT DO NOTHING)
+            seed_file = MIGRATIONS_DIR / "seed.sql"
+            if seed_file.exists():
+                await _run_sql_file(conn, seed_file)
+
+        logger.info("Pool DB pret et base initialisee")
 
     except Exception as e:
         logger.error(f"Erreur init DB: {e}")
@@ -101,7 +69,6 @@ async def close_db():
     if _pool is not None:
         await _pool.close()
         _pool = None
-        logger.info("Pool DB ferme")
 
 
 def get_pool() -> asyncpg.Pool:

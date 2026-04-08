@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- MODULE 1 : AUTHENTIFICATION
 -- ============================================
 
-CREATE TABLE utilisateur (
+CREATE TABLE IF NOT EXISTS utilisateur (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     mot_de_passe_hash TEXT NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE utilisateur (
     date_modification TIMESTAMP
 );
 
-CREATE TABLE token_reinitialisation (
+CREATE TABLE IF NOT EXISTS token_reinitialisation (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_utilisateur UUID
         REFERENCES utilisateur(id) ON DELETE CASCADE,
@@ -49,7 +49,7 @@ CREATE TABLE token_reinitialisation (
     date_creation TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE session_utilisateur (
+CREATE TABLE IF NOT EXISTS session_utilisateur (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_utilisateur UUID
         REFERENCES utilisateur(id) ON DELETE CASCADE,
@@ -62,7 +62,7 @@ CREATE TABLE session_utilisateur (
     active BOOLEAN DEFAULT TRUE
 );
 
-CREATE TABLE journal_connexion (
+CREATE TABLE IF NOT EXISTS journal_connexion (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_utilisateur UUID REFERENCES utilisateur(id),
     email_tente VARCHAR(255),
@@ -76,7 +76,7 @@ CREATE TABLE journal_connexion (
 -- MODULE 2 : RÉSEAU TÉLÉCOM
 -- ============================================
 
-CREATE TABLE noeud_telecom (
+CREATE TABLE IF NOT EXISTS noeud_telecom (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
     type_noeud VARCHAR(50) CHECK (type_noeud IN (
@@ -102,12 +102,12 @@ CREATE TABLE noeud_telecom (
     CONSTRAINT chk_ports_max
         CHECK (ports_utilises <= nb_ports)
 );
-CREATE INDEX idx_noeud_telecom_geom
+CREATE INDEX IF NOT EXISTS idx_noeud_telecom_geom
     ON noeud_telecom USING GIST(geom);
-CREATE INDEX idx_noeud_telecom_type
+CREATE INDEX IF NOT EXISTS idx_noeud_telecom_type
     ON noeud_telecom(type_noeud);
 
-CREATE TABLE lien_telecom (
+CREATE TABLE IF NOT EXISTS lien_telecom (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
     id_noeud_depart UUID
@@ -134,14 +134,14 @@ CREATE TABLE lien_telecom (
     CONSTRAINT chk_noeuds_diff
         CHECK (id_noeud_depart != id_noeud_arrivee)
 );
-CREATE INDEX idx_lien_telecom_geom
+CREATE INDEX IF NOT EXISTS idx_lien_telecom_geom
     ON lien_telecom USING GIST(geom);
 
 -- ============================================
 -- MODULE 3 : GÉNIE CIVIL
 -- ============================================
 
-CREATE TABLE noeud_gc (
+CREATE TABLE IF NOT EXISTS noeud_gc (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
     type_noeud VARCHAR(50) CHECK (type_noeud IN (
@@ -162,10 +162,10 @@ CREATE TABLE noeud_gc (
     CONSTRAINT chk_fourreaux
         CHECK (fourreaux_occupes <= nb_fourreaux)
 );
-CREATE INDEX idx_noeud_gc_geom
+CREATE INDEX IF NOT EXISTS idx_noeud_gc_geom
     ON noeud_gc USING GIST(geom);
 
-CREATE TABLE lien_gc (
+CREATE TABLE IF NOT EXISTS lien_gc (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
     id_noeud_depart UUID
@@ -193,7 +193,7 @@ CREATE TABLE lien_gc (
     CONSTRAINT chk_noeuds_gc_diff
         CHECK (id_noeud_depart != id_noeud_arrivee)
 );
-CREATE INDEX idx_lien_gc_geom
+CREATE INDEX IF NOT EXISTS idx_lien_gc_geom
     ON lien_gc USING GIST(geom);
 
 ALTER TABLE lien_telecom
@@ -204,7 +204,7 @@ ALTER TABLE lien_telecom
 -- MODULE 4 : LOGEMENTS & ÉQUIVALENTS
 -- ============================================
 
-CREATE TABLE groupe_logement (
+CREATE TABLE IF NOT EXISTS groupe_logement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(20) UNIQUE NOT NULL,
     nom VARCHAR(100) NOT NULL,
@@ -219,7 +219,7 @@ VALUES
     ('PAVILLON','Pavillon','🏠','#F59E0B',1),
     ('IMMEUBLE','Immeuble','🏢','#3B82F6',2);
 
-CREATE TABLE type_logement (
+CREATE TABLE IF NOT EXISTS type_logement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_groupe UUID
         REFERENCES groupe_logement(id) NOT NULL,
@@ -283,7 +283,7 @@ FROM groupe_logement g,
 ) AS v(code,nom,el,taux,log,icone,couleur)
 WHERE g.code = 'IMMEUBLE';
 
-CREATE TABLE logement (
+CREATE TABLE IF NOT EXISTS logement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(150) UNIQUE NOT NULL,
     id_type_logement UUID
@@ -308,16 +308,16 @@ CREATE TABLE logement (
     date_creation TIMESTAMP DEFAULT NOW(),
     date_modification TIMESTAMP
 );
-CREATE INDEX idx_logement_geom
+CREATE INDEX IF NOT EXISTS idx_logement_geom
     ON logement USING GIST(geom);
-CREATE INDEX idx_logement_statut
+CREATE INDEX IF NOT EXISTS idx_logement_statut
     ON logement(statut_ftth);
 
 -- ============================================
 -- MODULE 5 : CATALOGUE ÉQUIPEMENTS
 -- ============================================
 
-CREATE TABLE categorie_equipement (
+CREATE TABLE IF NOT EXISTS categorie_equipement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom VARCHAR(100) UNIQUE NOT NULL,
     icone VARCHAR(50),
@@ -329,7 +329,7 @@ CREATE TABLE categorie_equipement (
     date_creation TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE type_equipement (
+CREATE TABLE IF NOT EXISTS type_equipement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(50) UNIQUE NOT NULL,
     nom VARCHAR(150) NOT NULL,
@@ -350,7 +350,7 @@ CREATE TABLE type_equipement (
     date_creation TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE attribut_type_equipement (
+CREATE TABLE IF NOT EXISTS attribut_type_equipement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_type_equipement UUID
         REFERENCES type_equipement(id) ON DELETE CASCADE,
@@ -368,7 +368,7 @@ CREATE TABLE attribut_type_equipement (
     UNIQUE(id_type_equipement, nom_champ)
 );
 
-CREATE TABLE equipement (
+CREATE TABLE IF NOT EXISTS equipement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(150) UNIQUE NOT NULL,
     id_type_equipement UUID
@@ -389,12 +389,12 @@ CREATE TABLE equipement (
     cree_par UUID REFERENCES utilisateur(id),
     date_creation TIMESTAMP DEFAULT NOW()
 );
-CREATE INDEX idx_equipement_geom
+CREATE INDEX IF NOT EXISTS idx_equipement_geom
     ON equipement USING GIST(geom_point);
-CREATE INDEX idx_equipement_custom
+CREATE INDEX IF NOT EXISTS idx_equipement_custom
     ON equipement USING GIN(attributs_custom);
 
-CREATE TABLE demande_equipement (
+CREATE TABLE IF NOT EXISTS demande_equipement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_propose VARCHAR(150) NOT NULL,
     code_propose VARCHAR(50),
@@ -420,7 +420,7 @@ CREATE TABLE demande_equipement (
 -- MODULE 6 : IMPORT DWG
 -- ============================================
 
-CREATE TABLE import_dwg (
+CREATE TABLE IF NOT EXISTS import_dwg (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_fichier VARCHAR(255),
     utilisateur_import UUID REFERENCES utilisateur(id),
@@ -439,7 +439,7 @@ CREATE TABLE import_dwg (
     mode_validation VARCHAR(20) DEFAULT 'assiste'
 );
 
-CREATE TABLE rapport_import (
+CREATE TABLE IF NOT EXISTS rapport_import (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_import UUID REFERENCES import_dwg(id),
     type_erreur VARCHAR(100),
@@ -457,7 +457,7 @@ CREATE TABLE rapport_import (
 -- MODULE 7 : SUIVI DES TRAVAUX
 -- ============================================
 
-CREATE TABLE equipe_travaux (
+CREATE TABLE IF NOT EXISTS equipe_travaux (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom VARCHAR(150) UNIQUE NOT NULL,
     chef_equipe UUID REFERENCES utilisateur(id),
@@ -471,7 +471,7 @@ CREATE TABLE equipe_travaux (
 
 CREATE SEQUENCE seq_ot START 1;
 
-CREATE TABLE ordre_travail (
+CREATE TABLE IF NOT EXISTS ordre_travail (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     numero_ot VARCHAR(50) UNIQUE NOT NULL,
     titre VARCHAR(255) NOT NULL,
@@ -512,11 +512,11 @@ CREATE TABLE ordre_travail (
     date_creation TIMESTAMP DEFAULT NOW(),
     date_modification TIMESTAMP
 );
-CREATE INDEX idx_ot_statut ON ordre_travail(statut);
-CREATE INDEX idx_ot_geom
+CREATE INDEX IF NOT EXISTS idx_ot_statut ON ordre_travail(statut);
+CREATE INDEX IF NOT EXISTS idx_ot_geom
     ON ordre_travail USING GIST(geom_point);
 
-CREATE TABLE tache_travail (
+CREATE TABLE IF NOT EXISTS tache_travail (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_ot UUID
         REFERENCES ordre_travail(id) ON DELETE CASCADE,
@@ -536,7 +536,7 @@ CREATE TABLE tache_travail (
     date_creation TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE rapport_journalier (
+CREATE TABLE IF NOT EXISTS rapport_journalier (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_ot UUID REFERENCES ordre_travail(id),
     date_rapport DATE NOT NULL,
@@ -555,7 +555,7 @@ CREATE TABLE rapport_journalier (
     UNIQUE(id_ot, date_rapport, redige_par)
 );
 
-CREATE TABLE reception_travaux (
+CREATE TABLE IF NOT EXISTS reception_travaux (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_ot UUID REFERENCES ordre_travail(id) UNIQUE,
     conformite_technique BOOLEAN,
@@ -571,7 +571,7 @@ CREATE TABLE reception_travaux (
     commentaire TEXT
 );
 
-CREATE TABLE alerte_travaux (
+CREATE TABLE IF NOT EXISTS alerte_travaux (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     id_ot UUID REFERENCES ordre_travail(id),
     type_alerte VARCHAR(100),
@@ -588,7 +588,7 @@ CREATE TABLE alerte_travaux (
 -- MODULE 8 : ITINÉRAIRES
 -- ============================================
 
-CREATE TABLE itineraire (
+CREATE TABLE IF NOT EXISTS itineraire (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom VARCHAR(200),
     type_itineraire VARCHAR(50) CHECK (type_itineraire IN (
@@ -613,14 +613,14 @@ CREATE TABLE itineraire (
     calcule_par UUID REFERENCES utilisateur(id),
     date_calcul TIMESTAMP DEFAULT NOW()
 );
-CREATE INDEX idx_itineraire_trace
+CREATE INDEX IF NOT EXISTS idx_itineraire_trace
     ON itineraire USING GIST(geom_trace);
 
 -- ============================================
 -- MODULE 9 : BON DE COMMANDE ÉLIGIBILITÉ
 -- ============================================
 
-CREATE TABLE bon_commande (
+CREATE TABLE IF NOT EXISTS bon_commande (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
@@ -640,14 +640,14 @@ CREATE TABLE bon_commande (
     date_creation TIMESTAMP DEFAULT NOW(),
     date_contact TIMESTAMP
 );
-CREATE INDEX idx_bon_commande_statut
+CREATE INDEX IF NOT EXISTS idx_bon_commande_statut
     ON bon_commande(statut);
 
 -- ============================================
 -- MODULE 10 : HISTORISATION
 -- ============================================
 
-CREATE TABLE historique_modifications (
+CREATE TABLE IF NOT EXISTS historique_modifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     table_cible VARCHAR(100),
     id_objet UUID,
@@ -659,14 +659,14 @@ CREATE TABLE historique_modifications (
     donnees_avant JSONB,
     donnees_apres JSONB
 );
-CREATE INDEX idx_historique_table
+CREATE INDEX IF NOT EXISTS idx_historique_table
     ON historique_modifications(table_cible, id_objet);
 
 -- ============================================
 -- MODULE 11 : NOTIFICATIONS EMAIL
 -- ============================================
 
-CREATE TABLE notification_email (
+CREATE TABLE IF NOT EXISTS notification_email (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     destinataire_email VARCHAR(255) NOT NULL,
     destinataire_nom VARCHAR(200),
