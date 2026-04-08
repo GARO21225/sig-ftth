@@ -33,24 +33,53 @@ async def init_db():
         engine = _pool
 
         async with _pool.acquire() as conn:
-            # Extensions (idempotent)
-            await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+
+            # uuid-ossp est necessaire pour les UUID (disponible partout)
             await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-            logger.info("Extensions OK")
+            logger.info("Extension uuid-ossp OK")
 
-            # Schema (idempotent — tous CREATE TABLE IF NOT EXISTS)
-            schema_file = MIGRATIONS_DIR / "schema.sql"
-            if schema_file.exists():
-                await _run_sql_file(conn, schema_file)
+            # Schema core : auth tables sans PostGIS (toujours execute)
+            core_file = MIGRATIONS_DIR / "schema_core.sql"
+            if core_file.exists():
+                await _run_sql_file(conn, core_file)
             else:
-                raise FileNotFoundError(f"schema.sql absent : {schema_file}")
+                raise FileNotFoundError(f"schema_core.sql absent : {core_file}")
 
-            # Seed (idempotent — tous ON CONFLICT DO NOTHING)
-            seed_file = MIGRATIONS_DIR / "seed.sql"
-            if seed_file.exists():
-                await _run_sql_file(conn, seed_file)
+            # Seed core : utilisateurs seulement (sans dependance PostGIS)
+            seed_core = MIGRATIONS_DIR / "seed_core.sql"
+            if seed_core.exists():
+                await _run_sql_file(conn, seed_core)
 
-        logger.info("Pool DB pret et base initialisee")
+            # PostGIS + tables spatiales : tentative, echec non bloquant
+            postgis_ok = False
+            try:
+                await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+                postgis_ok = True
+                logger.info("Extension PostGIS activee")
+            except Exception as e:
+                logger.warning(
+                    f"PostGIS non disponible sur ce serveur PostgreSQL : {e}. "
+                    "Les tables spatiales ne seront pas creees. "
+                    "Pour activer PostGIS sur Railway, utilisez un service "
+                    "PostgreSQL avec l'image postgis/postgis:15-3.3"
+                )
+
+            if postgis_ok:
+                spatial_file = MIGRATIONS_DIR / "schema_spatial.sql"
+                if spatial_file.exists():
+                    try:
+                        await _run_sql_file(conn, spatial_file)
+                    except Exception as e:
+                        logger.warning(f"schema_spatial.sql partiel : {e}")
+
+                seed_full = MIGRATIONS_DIR / "seed.sql"
+                if seed_full.exists():
+                    try:
+                        await _run_sql_file(conn, seed_full)
+                    except Exception as e:
+                        logger.warning(f"seed.sql partiel : {e}")
+
+        logger.info("Pool DB pret — auth operationnelle")
 
     except Exception as e:
         logger.error(f"Erreur init DB: {e}")
