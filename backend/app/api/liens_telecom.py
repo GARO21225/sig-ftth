@@ -112,6 +112,25 @@ async def liens_telecom_geojson(
     """)
     return row['geojson']
 
+@router.get("/{lien_id}")
+async def detail_lien_telecom(
+    lien_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    row = await db.fetchrow("""
+        SELECT lt.*, ST_AsGeoJSON(lt.geom)::json AS geom_json,
+               n1.nom_unique AS noeud_depart_nom,
+               n2.nom_unique AS noeud_arrivee_nom
+        FROM lien_telecom lt
+        LEFT JOIN noeud_telecom n1 ON lt.id_noeud_depart = n1.id
+        LEFT JOIN noeud_telecom n2 ON lt.id_noeud_arrivee = n2.id
+        WHERE lt.id = $1
+    """, lien_id)
+    if not row:
+        raise HTTPException(404, "Lien introuvable")
+    return dict(row)
+
 @router.post("")
 async def creer_lien_telecom(
     data: LienTelecomCreate,
@@ -129,10 +148,23 @@ async def creer_lien_telecom(
         data.nom_unique
     )
     if existe:
-        raise HTTPException(
-            400,
-            f"Un lien '{data.nom_unique}' existe déjà"
-        )
+        raise HTTPException(400, f"Un lien '{data.nom_unique}' existe déjà")
+
+    # Validation attributaire — cohérence fibres PCR v2.5
+    if data.nb_fibres and data.fibres_utilisees:
+        if data.fibres_utilisees > data.nb_fibres:
+            raise HTTPException(400,
+                f"fibres_utilisees ({data.fibres_utilisees}) "
+                f"ne peut pas dépasser nb_fibres ({data.nb_fibres})"
+            )
+
+    # Vérifier que les noeuds existent
+    n_dep = await db.fetchrow("SELECT id FROM noeud_telecom WHERE id=$1", data.id_noeud_depart)
+    n_arr = await db.fetchrow("SELECT id FROM noeud_telecom WHERE id=$1", data.id_noeud_arrivee)
+    if not n_dep:
+        raise HTTPException(400, f"Noeud départ '{data.id_noeud_depart}' introuvable")
+    if not n_arr:
+        raise HTTPException(400, f"Noeud arrivée '{data.id_noeud_arrivee}' introuvable")
 
     # Vérifier noeuds différents
     if data.id_noeud_depart == data.id_noeud_arrivee:

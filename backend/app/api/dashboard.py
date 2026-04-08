@@ -15,9 +15,20 @@ async def get_kpi(
     if cached:
         return cached
 
-    kpi = await db.fetchrow(
-        "SELECT * FROM kpi_dashboard"
-    )
+    try:
+        kpi = await db.fetchrow("SELECT * FROM kpi_dashboard")
+    except Exception:
+        kpi = None
+
+    if kpi is None:
+        return {
+            "logements": {"total": 0, "total_el": 0, "el_raccordables": 0,
+                          "el_raccordes": 0, "taux_couverture_pct": 0, "taux_penetration_pct": 0},
+            "reseau": {"nb_noeuds_telecom": 0, "nb_noeuds_gc": 0,
+                       "nb_liens_telecom": 0, "nb_liens_gc": 0},
+            "travaux": {"ot_en_cours": 0, "ot_en_retard": 0},
+            "commandes": {"bons_commande_attente": 0}
+        }
 
     # Taux calculés
     total_el = kpi['total_el'] or 0

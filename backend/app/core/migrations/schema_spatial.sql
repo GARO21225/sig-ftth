@@ -125,6 +125,8 @@ CREATE INDEX IF NOT EXISTS idx_lien_gc_geom
     ON lien_gc USING GIST(geom);
 
 ALTER TABLE lien_telecom
+    DROP CONSTRAINT IF EXISTS fk_lien_gc;
+ALTER TABLE lien_telecom
     ADD CONSTRAINT fk_lien_gc
     FOREIGN KEY (id_lien_gc) REFERENCES lien_gc(id);
 
@@ -570,6 +572,33 @@ CREATE TABLE IF NOT EXISTS bon_commande (
 );
 CREATE INDEX IF NOT EXISTS idx_bon_commande_statut
     ON bon_commande(statut);
+
+-- ============================================
+-- MODULE 9B : ZONES D'INFLUENCE
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS zone_influence (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    nom VARCHAR(150) NOT NULL,
+    code VARCHAR(50) UNIQUE,
+    type_zone VARCHAR(50) DEFAULT 'standard' CHECK (type_zone IN (
+        'standard','prioritaire','exclusion','gc'
+    )),
+    geom GEOMETRY(POLYGON, 4326) NOT NULL,
+    capacite_max INTEGER,
+    nb_clients_actifs INTEGER DEFAULT 0,
+    statut VARCHAR(30) DEFAULT 'active' CHECK (statut IN (
+        'active','inactive','planifiee'
+    )),
+    responsable UUID REFERENCES utilisateur(id),
+    commentaire TEXT,
+    date_creation TIMESTAMP DEFAULT NOW(),
+    date_modification TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_zone_influence_geom
+    ON zone_influence USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_zone_influence_statut
+    ON zone_influence(statut);
 
 -- ============================================
 -- MODULE 10 : HISTORISATION

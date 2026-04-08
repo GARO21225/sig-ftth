@@ -1,11 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Polyline,
-  Popup,
-  useMap,
+  MapContainer, TileLayer, Marker, Polyline,
+  Popup, useMap, useMapEvents,
 } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -13,7 +9,6 @@ import api from '@services/api'
 import { useMapStore, useAuthStore } from '@store/useStore'
 import toast from 'react-hot-toast'
 
-// Fix icônes Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
@@ -21,30 +16,35 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
-const makeIcon = (color: string, emoji: string) =>
+const makeIcon = (color: string, emoji: string, size = 32) =>
   L.divIcon({
-    html: `<div style="background:${color};width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);font-size:14px;line-height:1;">${emoji}</span></div>`,
+    html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);font-size:${Math.round(size*0.44)}px;line-height:1;">${emoji}</span></div>`,
     className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
+    iconSize: [size, size],
+    iconAnchor: [size/2, size],
+    popupAnchor: [0, -size],
+  })
+
+const makeDraftIcon = () =>
+  L.divIcon({
+    html: `<div style="background:#F59E0B;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px #F59E0B55;animation:pulse 1s infinite;"></div>`,
+    className: '', iconSize: [24,24], iconAnchor: [12,12],
   })
 
 const ICONS: Record<string, L.DivIcon> = {
-  NRO: makeIcon('#1D4ED8', '🔵'),
-  SRO: makeIcon('#6366F1', '🟣'),
-  PBO: makeIcon('#8B5CF6', '🔷'),
-  PTO: makeIcon('#A78BFA', '◾'),
-  PM:  makeIcon('#60A5FA', '🔹'),
-  GC:  makeIcon('#F59E0B', '🟡'),
-  LOG: makeIcon('#10B981', '🏠'),
+  NRO: makeIcon('#1D4ED8','🔵'), SRO: makeIcon('#6366F1','🟣'),
+  PBO: makeIcon('#8B5CF6','🔷'), PTO: makeIcon('#A78BFA','◾'),
+  PM:  makeIcon('#60A5FA','🔹'), GC:  makeIcon('#F59E0B','🟡'),
+  LOG: makeIcon('#10B981','🏠'),
 }
 
 const TILE_STYLES = {
-  dark:      { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',     label: '🌑 Sombre'    },
+  dark:      { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', label: '🌑 Sombre' },
   satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', label: '🛰️ Satellite' },
-  streets:   { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                label: '🗺️ Rues'      },
+  streets:   { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', label: '🗺️ Rues' },
 }
+
+type EditMode = null | 'noeud_telecom' | 'noeud_gc' | 'lien_telecom' | 'lien_gc'
 
 export default function MapPage() {
   const [noeuds,    setNoeuds]    = useState<any[]>([])
@@ -59,17 +59,21 @@ export default function MapPage() {
   const [searchQuery,    setSearchQuery]    = useState('')
   const [searchResults,  setSearchResults]  = useState<any[]>([])
 
+  // Mode édition
+  const [editMode,      setEditMode]      = useState<EditMode>(null)
+  const [draftPoint,    setDraftPoint]    = useState<[number,number]|null>(null)
+  const [draftForm,     setDraftForm]     = useState<any>({})
+  const [savingDraft,   setSavingDraft]   = useState(false)
+  const [showEditPanel, setShowEditPanel] = useState(false)
+
   const { layers, toggleLayer, mapStyle, setMapStyle } = useMapStore()
-  const { canEdit } = useAuthStore()
+  const { canEdit: canEditFn } = useAuthStore()
+  const canEdit = canEditFn()
 
   useEffect(() => { chargerDonnees() }, [])
 
-  // BUG #7 FIX — Promise.allSettled au lieu de Promise.all
-  // Si /noeuds-gc échoue, les autres données s'affichent quand même
   const chargerDonnees = async () => {
-    setLoading(true)
-    setErrors([])
-
+    setLoading(true); setErrors([])
     const requests = [
       { key: 'noeuds-telecom', fn: () => api.get('/noeuds-telecom') },
       { key: 'noeuds-gc',      fn: () => api.get('/noeuds-gc') },
@@ -77,13 +81,8 @@ export default function MapPage() {
       { key: 'liens-gc',       fn: () => api.get('/liens-gc') },
       { key: 'logements',      fn: () => api.get('/logements') },
     ]
-
-    const results = await Promise.allSettled(
-      requests.map(r => r.fn())
-    )
-
+    const results = await Promise.allSettled(requests.map(r => r.fn()))
     const newErrors: string[] = []
-
     results.forEach((result, i) => {
       const key = requests[i].key
       if (result.status === 'fulfilled') {
@@ -93,83 +92,118 @@ export default function MapPage() {
         if (key === 'liens-telecom')  setLiens(data)
         if (key === 'liens-gc')       setLiensGC(data)
         if (key === 'logements')      setLogements(data)
-      } else {
-        newErrors.push(key)
-        console.warn(`⚠️ Couche ${key} non disponible:`, result.reason)
-      }
+      } else { newErrors.push(key) }
     })
+    setErrors(newErrors); setLoading(false)
+  }
 
-    if (newErrors.length > 0) {
-      toast(`⚠️ Couches indisponibles: ${newErrors.join(', ')}`, { icon: '⚠️' })
+  const activerEditMode = (mode: EditMode) => {
+    setEditMode(mode); setDraftPoint(null); setDraftForm({})
+    setShowEditPanel(true); setSelected(null)
+    if (mode) toast(`Mode création — cliquez sur la carte`, { icon: '✏️', duration: 3000 })
+  }
+
+  const annulerEdition = () => {
+    setEditMode(null); setDraftPoint(null); setDraftForm({})
+    setShowEditPanel(false)
+  }
+
+  const sauvegarderNoeud = async () => {
+    if (!draftPoint) return toast.error('Cliquez sur la carte pour placer le nœud')
+    if (!draftForm.nom_unique) return toast.error('Nom unique requis')
+    if (!draftForm.type_noeud) return toast.error('Type de nœud requis')
+    setSavingDraft(true)
+    try {
+      const endpoint = editMode === 'noeud_telecom' ? '/noeuds-telecom' : '/noeuds-gc'
+      await api.post(endpoint, {
+        ...draftForm,
+        latitude: draftPoint[0],
+        longitude: draftPoint[1],
+        etat: draftForm.etat || 'actif',
+      })
+      toast.success(`Nœud créé : ${draftForm.nom_unique}`)
+      annulerEdition()
+      chargerDonnees()
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Erreur création')
+    } finally { setSavingDraft(false) }
+  }
+
+  const supprimerElement = async (item: any) => {
+    if (!confirm(`Supprimer "${item.nom_unique}" ?`)) return
+    try {
+      const map: Record<string, string> = {
+        noeud_telecom: 'noeuds-telecom', noeud_gc: 'noeuds-gc',
+        lien_telecom: 'liens-telecom',   lien_gc: 'liens-gc',
+        logement: 'logements',
+      }
+      await api.delete(`/${map[item._type]}/${item.id}`)
+      toast.success('Élément supprimé')
+      setSelected(null)
+      chargerDonnees()
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Erreur suppression')
     }
-
-    setErrors(newErrors)
-    setLoading(false)
   }
 
   const rechercher = (q: string) => {
     setSearchQuery(q)
     if (!q.trim()) { setSearchResults([]); return }
     const ql = q.toLowerCase()
-    const results = [
+    setSearchResults([
       ...noeuds.filter(n => n.nom_unique?.toLowerCase().includes(ql)).map(n => ({ ...n, _type: 'noeud_telecom' })),
       ...noeudsGC.filter(n => n.nom_unique?.toLowerCase().includes(ql)).map(n => ({ ...n, _type: 'noeud_gc' })),
-      ...logements.filter(l =>
-        l.nom_unique?.toLowerCase().includes(ql) ||
-        l.adresse?.toLowerCase().includes(ql) ||
-        l.commune?.toLowerCase().includes(ql)
-      ).map(l => ({ ...l, _type: 'logement' })),
-    ].slice(0, 8)
-    setSearchResults(results)
+      ...logements.filter(l => l.nom_unique?.toLowerCase().includes(ql) || l.adresse?.toLowerCase().includes(ql)).map(l => ({ ...l, _type: 'logement' })),
+    ].slice(0, 8))
   }
 
   const tileUrl = TILE_STYLES[mapStyle as keyof typeof TILE_STYLES]?.url || TILE_STYLES.dark.url
 
   return (
     <div className="relative h-full w-full">
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
 
-      <MapContainer
-        center={[5.3599, -4.0083]}
-        zoom={13}
-        className="h-full w-full"
-        zoomControl={false}
-      >
+      <MapContainer center={[5.3599, -4.0083]} zoom={13} className="h-full w-full" zoomControl={false}>
         <TileLayer url={tileUrl} attribution="© CartoDB / OSM" maxZoom={20} />
         <ZoomControl />
+        {editMode && <MapClickHandler onMapClick={setDraftPoint} />}
 
         {layers.noeud_telecom && noeuds.map(n => (
-          <Marker key={n.id} position={[n.latitude, n.longitude]}
-            icon={ICONS[n.type_noeud] || ICONS.PBO}
+          <Marker key={n.id} position={[n.latitude, n.longitude]} icon={ICONS[n.type_noeud] || ICONS.PBO}
             eventHandlers={{ click: () => setSelected({ ...n, _type: 'noeud_telecom' }) }}>
-            <Popup><PopupNoeudTelecom noeud={n} /></Popup>
+            <Popup><PopupNoeud item={n} type="noeud_telecom" onDelete={canEdit ? supprimerElement : undefined} /></Popup>
           </Marker>
         ))}
 
         {layers.noeud_gc && noeudsGC.map(n => (
-          <Marker key={n.id} position={[n.latitude, n.longitude]}
-            icon={ICONS.GC}
+          <Marker key={n.id} position={[n.latitude, n.longitude]} icon={ICONS.GC}
             eventHandlers={{ click: () => setSelected({ ...n, _type: 'noeud_gc' }) }}>
-            <Popup><PopupNoeudGC noeud={n} /></Popup>
+            <Popup><PopupNoeud item={n} type="noeud_gc" onDelete={canEdit ? supprimerElement : undefined} /></Popup>
           </Marker>
         ))}
 
         {layers.logement && logements.map(l => (
-          <Marker key={l.id} position={[l.latitude, l.longitude]}
-            icon={ICONS.LOG}
+          <Marker key={l.id} position={[l.latitude, l.longitude]} icon={ICONS.LOG}
             eventHandlers={{ click: () => setSelected({ ...l, _type: 'logement' }) }}>
-            <Popup><PopupLogement logement={l} /></Popup>
+            <Popup><PopupLogement logement={l} onDelete={canEdit ? supprimerElement : undefined} /></Popup>
           </Marker>
         ))}
 
-        {layers.lien_telecom && liens.map(l => {
-          if (!l.geom?.coordinates) return null
-          return <LienTelecomLayer key={l.id} lien={l} onClick={() => setSelected({ ...l, _type: 'lien_telecom' })} />
-        })}
+        {layers.lien_telecom && liens.map(l => l.geom?.coordinates
+          ? <LienTelecomLayer key={l.id} lien={l}
+              onClick={() => setSelected({ ...l, _type: 'lien_telecom' })} />
+          : null)}
 
-        {layers.lien_gc && liensGC.map(l => {
-          if (!l.geom?.coordinates) return null
-          return <LienGCLayer key={l.id} lien={l} onClick={() => setSelected({ ...l, _type: 'lien_gc' })} />
-        })}
+        {layers.lien_gc && liensGC.map(l => l.geom?.coordinates
+          ? <LienGCLayer key={l.id} lien={l}
+              onClick={() => setSelected({ ...l, _type: 'lien_gc' })} />
+          : null)}
+
+        {draftPoint && (
+          <Marker position={draftPoint} icon={makeDraftIcon()}>
+            <Popup><div className="text-sm text-center p-1">📍 {draftPoint[0].toFixed(5)}, {draftPoint[1].toFixed(5)}</div></Popup>
+          </Marker>
+        )}
 
         {selected && <CenterOnFeature feature={selected} />}
       </MapContainer>
@@ -179,8 +213,7 @@ export default function MapPage() {
         <div className="flex-1 relative">
           <div className="flex items-center bg-gray-900/95 backdrop-blur-sm rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
             <span className="pl-4 text-gray-400">🔍</span>
-            <input type="text" value={searchQuery}
-              onChange={e => rechercher(e.target.value)}
+            <input type="text" value={searchQuery} onChange={e => rechercher(e.target.value)}
               placeholder="Rechercher nœud, logement, adresse..."
               className="flex-1 bg-transparent px-3 py-3 text-white text-sm outline-none placeholder-gray-500" />
             {searchQuery && (
@@ -191,16 +224,14 @@ export default function MapPage() {
           {searchResults.length > 0 && (
             <div className="absolute top-14 left-0 right-0 bg-gray-900/98 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden z-50">
               {searchResults.map((r, i) => (
-                <button key={i} onClick={() => { setSelected(r); setSearchQuery(r.nom_unique || ''); setSearchResults([]) }}
+                <button key={i} onClick={() => { setSelected(r); setSearchQuery(r.nom_unique||''); setSearchResults([]) }}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800 transition-colors text-left border-b border-gray-800 last:border-0">
                   <span className="text-xl">
-                    {r._type === 'noeud_telecom' && '📡'}
-                    {r._type === 'noeud_gc'      && '🏗️'}
-                    {r._type === 'logement'       && '🏠'}
+                    {r._type==='noeud_telecom'&&'📡'}{r._type==='noeud_gc'&&'🏗️'}{r._type==='logement'&&'🏠'}
                   </span>
                   <div>
                     <p className="text-sm font-medium text-white">{r.nom_unique}</p>
-                    <p className="text-xs text-gray-400">{r._type === 'logement' ? r.commune || r.adresse : r.type_noeud}</p>
+                    <p className="text-xs text-gray-400">{r._type==='logement' ? r.commune||r.adresse : r.type_noeud}</p>
                   </div>
                 </button>
               ))}
@@ -212,7 +243,6 @@ export default function MapPage() {
           className={`p-3 rounded-2xl border shadow-2xl backdrop-blur-sm transition-all ${showLayerPanel ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-900/95 border-gray-700 text-gray-300'}`}>
           🗂️
         </button>
-
         <button onClick={chargerDonnees}
           className="p-3 bg-gray-900/95 backdrop-blur-sm rounded-2xl border border-gray-700 text-gray-300 shadow-2xl hover:bg-gray-800 transition-all">
           🔄
@@ -222,9 +252,7 @@ export default function MapPage() {
       {/* Panneau couches */}
       {showLayerPanel && (
         <div className="absolute top-20 right-4 z-[1000] w-64 bg-gray-900/98 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-2xl">
-          <div className="p-4 border-b border-gray-700">
-            <h3 className="font-bold text-white text-sm">🗂️ Couches</h3>
-          </div>
+          <div className="p-4 border-b border-gray-700"><h3 className="font-bold text-white text-sm">🗂️ Couches</h3></div>
           <div className="p-3 space-y-1">
             {[
               { key: 'noeud_telecom', label: 'Nœuds Télécom', icon: '📡', count: noeuds.length,    err: errors.includes('noeuds-telecom') },
@@ -237,10 +265,7 @@ export default function MapPage() {
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm ${layers[layer.key] ? 'bg-blue-900/50 text-blue-300' : 'text-gray-500 hover:bg-gray-800'}`}>
                 <span className="text-lg">{layer.icon}</span>
                 <span className="flex-1 text-left font-medium">{layer.label}</span>
-                {layer.err
-                  ? <span className="text-xs text-red-400">⚠️</span>
-                  : <span className="text-xs opacity-60">{layer.count}</span>
-                }
+                {layer.err ? <span className="text-xs text-red-400">⚠️</span> : <span className="text-xs opacity-60">{layer.count}</span>}
                 <span className={`w-4 h-4 rounded border-2 flex-shrink-0 ${layers[layer.key] ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`} />
               </button>
             ))}
@@ -250,11 +275,96 @@ export default function MapPage() {
             <div className="grid grid-cols-3 gap-1">
               {Object.entries(TILE_STYLES).map(([key, val]) => (
                 <button key={key} onClick={() => setMapStyle(key as any)}
-                  className={`py-2 rounded-lg text-xs font-medium transition-all ${mapStyle === key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                  className={`py-2 rounded-lg text-xs font-medium transition-all ${mapStyle===key ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
                   {val.label}
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barre d'édition (admin/chef/technicien) */}
+      {canEdit && (
+        <div className="absolute top-20 left-4 z-[1000] flex flex-col gap-2">
+          {editMode ? (
+            <div className="bg-amber-900/95 backdrop-blur-sm border border-amber-600 rounded-2xl shadow-2xl p-3">
+              <p className="text-xs text-amber-300 font-medium mb-2">
+                ✏️ Mode création — {editMode.replace('_',' ')}
+              </p>
+              <p className="text-xs text-amber-400 mb-3">
+                {draftPoint ? `📍 ${draftPoint[0].toFixed(4)}, ${draftPoint[1].toFixed(4)}` : 'Cliquez sur la carte'}
+              </p>
+              <button onClick={annulerEdition}
+                className="w-full py-1.5 bg-red-700/70 hover:bg-red-600 text-white text-xs rounded-xl transition-all">
+                ✕ Annuler
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-2xl p-2 flex flex-col gap-1">
+              <p className="text-xs text-gray-500 px-2 py-1">✏️ Créer</p>
+              {[
+                { mode: 'noeud_telecom' as EditMode, label: 'Nœud télécom', icon: '📡' },
+                { mode: 'noeud_gc'      as EditMode, label: 'Nœud GC',      icon: '🏗️' },
+              ].map(b => (
+                <button key={b.mode} onClick={() => activerEditMode(b.mode)}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-blue-900/50 text-gray-300 hover:text-blue-300 text-xs rounded-xl transition-all">
+                  <span>{b.icon}</span><span>{b.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Panneau formulaire de création */}
+      {showEditPanel && editMode && (
+        <div className="absolute bottom-24 left-4 z-[1000] w-72 bg-gray-900/98 backdrop-blur-sm border border-amber-600/50 rounded-2xl shadow-2xl">
+          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+            <h3 className="font-bold text-white text-sm">
+              {editMode==='noeud_telecom'?'📡 Nouveau nœud télécom':'🏗️ Nouveau nœud GC'}
+            </h3>
+            <button onClick={annulerEdition} className="text-gray-500 hover:text-white text-lg">✕</button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Nom unique *</label>
+              <input value={draftForm.nom_unique||''} onChange={e => setDraftForm({...draftForm, nom_unique: e.target.value})}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                placeholder="ex: NRO-COCODY-01" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Type *</label>
+              <select value={draftForm.type_noeud||''} onChange={e => setDraftForm({...draftForm, type_noeud: e.target.value})}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500">
+                <option value="">-- Choisir --</option>
+                {editMode==='noeud_telecom'
+                  ? ['NRO','SRO','PBO','PTO','PM'].map(t => <option key={t} value={t}>{t}</option>)
+                  : ['chambre_l1t','chambre_l2t','chambre_l4t','appui_aerien','regard'].map(t => <option key={t} value={t}>{t}</option>)
+                }
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Capacité fibres</label>
+              <input type="number" value={draftForm.capacite_fibres_max||''} onChange={e => setDraftForm({...draftForm, capacite_fibres_max: parseInt(e.target.value)})}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                placeholder="ex: 96" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Commentaire</label>
+              <textarea value={draftForm.commentaire||''} onChange={e => setDraftForm({...draftForm, commentaire: e.target.value})}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500 resize-none"
+                rows={2} placeholder="Optionnel" />
+            </div>
+            {draftPoint && (
+              <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
+                📍 {draftPoint[0].toFixed(5)}, {draftPoint[1].toFixed(5)}
+              </div>
+            )}
+            <button onClick={sauvegarderNoeud} disabled={savingDraft||!draftPoint}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-all">
+              {savingDraft ? '⏳ Enregistrement...' : '✅ Créer le nœud'}
+            </button>
           </div>
         </div>
       )}
@@ -276,9 +386,13 @@ export default function MapPage() {
             <div className="text-xs text-yellow-300">⚠️ {errors.length} couche(s) KO</div>
           </div>
         )}
+        {editMode && (
+          <div className="bg-amber-900/90 border border-amber-600 rounded-xl px-3 py-2 text-center shadow-lg">
+            <div className="text-xs text-amber-300 font-medium">✏️ Mode édition actif</div>
+          </div>
+        )}
       </div>
 
-      {/* Loading */}
       {loading && (
         <div className="absolute inset-0 z-[2000] bg-gray-950/80 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-gray-900 rounded-2xl p-8 border border-gray-700 text-center">
@@ -293,11 +407,18 @@ export default function MapPage() {
 
 // ── Composants auxiliaires ──────────────────────────────────
 
+function MapClickHandler({ onMapClick }: { onMapClick: (pos: [number,number]) => void }) {
+  useMapEvents({
+    click(e) { onMapClick([e.latlng.lat, e.latlng.lng]) }
+  })
+  return null
+}
+
 function ZoomControl() {
   const map = useMap()
   return (
     <div className="absolute bottom-6 right-4 z-[1000] flex flex-col gap-1">
-      <button onClick={() => map.zoomIn()} className="w-10 h-10 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xl hover:bg-gray-800 shadow-lg flex items-center justify-center">+</button>
+      <button onClick={() => map.zoomIn()}  className="w-10 h-10 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xl hover:bg-gray-800 shadow-lg flex items-center justify-center">+</button>
       <button onClick={() => map.zoomOut()} className="w-10 h-10 bg-gray-900/95 border border-gray-700 rounded-xl text-white text-xl hover:bg-gray-800 shadow-lg flex items-center justify-center">−</button>
     </div>
   )
@@ -309,77 +430,61 @@ function CenterOnFeature({ feature }: { feature: any }) {
     if (feature?.latitude && feature?.longitude) {
       map.flyTo([feature.latitude, feature.longitude], 16, { duration: 1 })
     }
-  }, [feature, map])
+  }, [feature])
   return null
 }
 
+function PopupNoeud({ item, type, onDelete }: { item: any; type: string; onDelete?: (item: any) => void }) {
+  const emoji = type === 'noeud_telecom' ? '📡' : '🏗️'
+  return (
+    <div className="min-w-[200px]">
+      <div className="font-bold text-sm mb-2">{emoji} {item.nom_unique}</div>
+      <div className="space-y-1 text-xs text-gray-600">
+        <div><b>Type :</b> {item.type_noeud}</div>
+        <div><b>État :</b> <span className={item.etat==='actif'?'text-green-600':'text-orange-500'}>{item.etat}</span></div>
+        {item.capacite_fibres_max && <div><b>Capacité :</b> {item.capacite_fibres_max} fibres</div>}
+        {item.marque && <div><b>Marque :</b> {item.marque}</div>}
+        {item.commentaire && <div className="mt-1 italic">{item.commentaire}</div>}
+      </div>
+      {onDelete && (
+        <button onClick={() => onDelete({ ...item, _type: type })}
+          className="mt-3 w-full py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs rounded-lg border border-red-200 transition-all">
+          🗑️ Supprimer
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PopupLogement({ logement, onDelete }: { logement: any; onDelete?: (item: any) => void }) {
+  return (
+    <div className="min-w-[200px]">
+      <div className="font-bold text-sm mb-2">🏠 {logement.nom_unique}</div>
+      <div className="space-y-1 text-xs text-gray-600">
+        {logement.adresse && <div><b>Adresse :</b> {logement.adresse}</div>}
+        {logement.commune && <div><b>Commune :</b> {logement.commune}</div>}
+        <div><b>EL réels :</b> {logement.nb_el_reel||0}</div>
+        <div><b>EL raccordables :</b> {logement.nb_el_raccordables||0}</div>
+        <div><b>EL raccordés :</b> {logement.nb_el_raccordes||0}</div>
+      </div>
+      {onDelete && (
+        <button onClick={() => onDelete({ ...logement, _type: 'logement' })}
+          className="mt-3 w-full py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs rounded-lg border border-red-200 transition-all">
+          🗑️ Supprimer
+        </button>
+      )}
+    </div>
+  )
+}
+
 function LienTelecomLayer({ lien, onClick }: { lien: any; onClick: () => void }) {
-  const coords = lien.geom?.coordinates?.map((c: number[]) => [c[1], c[0]] as [number, number]) || []
-  const couleur = lien.taux_saturation_pct >= 90 ? '#EF4444' : lien.taux_saturation_pct >= 70 ? '#F59E0B' : '#6366F1'
+  const couleurs: Record<string, string> = { monomode: '#3B82F6', multimodes: '#8B5CF6', default: '#60A5FA' }
+  const couleur = couleurs[lien.type_cable] || couleurs.default
+  const coords: [number,number][] = lien.geom.coordinates.map(([lng,lat]: number[]) => [lat,lng])
   return <Polyline positions={coords} pathOptions={{ color: couleur, weight: 3, opacity: 0.85 }} eventHandlers={{ click: onClick }} />
 }
 
 function LienGCLayer({ lien, onClick }: { lien: any; onClick: () => void }) {
-  const coords = lien.geom?.coordinates?.map((c: number[]) => [c[1], c[0]] as [number, number]) || []
+  const coords: [number,number][] = lien.geom.coordinates.map(([lng,lat]: number[]) => [lat,lng])
   return <Polyline positions={coords} pathOptions={{ color: '#F59E0B', weight: 3, opacity: 0.7, dashArray: '8,4' }} eventHandlers={{ click: onClick }} />
-}
-
-function PopupNoeudTelecom({ noeud }: { noeud: any }) {
-  const sat = noeud.taux_saturation_pct || 0
-  return (
-    <div className="min-w-48 text-gray-900">
-      <div className="font-bold text-base mb-2">📡 {noeud.nom_unique}</div>
-      <div className="space-y-1 text-sm">
-        <div className="flex justify-between"><span className="text-gray-500">Type</span><span className="font-medium">{noeud.type_noeud}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">État</span><span className={`font-medium ${noeud.etat === 'actif' ? 'text-green-600' : 'text-red-600'}`}>{noeud.etat}</span></div>
-        {noeud.capacite_fibres_max && (
-          <>
-            <div className="flex justify-between"><span className="text-gray-500">Fibres</span><span className="font-medium">{noeud.fibres_utilisees}/{noeud.capacite_fibres_max}</span></div>
-            <div className="mt-2">
-              <div className="flex justify-between text-xs mb-1">
-                <span>Saturation</span>
-                <span className={sat >= 90 ? 'text-red-600' : sat >= 70 ? 'text-orange-500' : 'text-green-600'}>{sat}%</span>
-              </div>
-              <div className="h-2 bg-gray-200 rounded-full">
-                <div className={`h-2 rounded-full ${sat >= 90 ? 'bg-red-500' : sat >= 70 ? 'bg-orange-400' : 'bg-green-500'}`} style={{ width: `${Math.min(sat, 100)}%` }} />
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PopupNoeudGC({ noeud }: { noeud: any }) {
-  return (
-    <div className="min-w-44 text-gray-900">
-      <div className="font-bold text-base mb-2">🏗️ {noeud.nom_unique}</div>
-      <div className="space-y-1 text-sm">
-        <div className="flex justify-between"><span className="text-gray-500">Type</span><span className="font-medium">{noeud.type_noeud}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">Dimension</span><span className="font-medium">{noeud.dimension || '—'}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">Fourreaux</span><span className="font-medium">{noeud.fourreaux_occupes}/{noeud.nb_fourreaux || '—'}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">État</span><span className={`font-medium ${noeud.etat === 'actif' ? 'text-green-600' : 'text-orange-500'}`}>{noeud.etat}</span></div>
-      </div>
-    </div>
-  )
-}
-
-function PopupLogement({ logement }: { logement: any }) {
-  const STATUT_COLORS: Record<string, string> = {
-    raccorde: 'text-green-600', en_cours: 'text-blue-600', prevu: 'text-yellow-600',
-    non_prevu: 'text-gray-500', refuse: 'text-red-600', inaccessible: 'text-orange-600',
-  }
-  return (
-    <div className="min-w-44 text-gray-900">
-      <div className="font-bold text-base mb-2">🏠 {logement.nom_unique}</div>
-      <div className="space-y-1 text-sm">
-        <div className="flex justify-between"><span className="text-gray-500">Type</span><span className="font-medium text-xs">{logement.type_nom}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">EL réels</span><span className="font-bold">{logement.nb_el_reel}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">Raccordés</span><span className="font-medium text-green-600">{logement.nb_el_raccordes || 0}</span></div>
-        <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className={`font-medium ${STATUT_COLORS[logement.statut_ftth] || 'text-gray-600'}`}>{logement.statut_ftth}</span></div>
-        {logement.commune && <div className="flex justify-between"><span className="text-gray-500">Commune</span><span className="font-medium">{logement.commune}</span></div>}
-      </div>
-    </div>
-  )
 }

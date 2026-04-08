@@ -98,11 +98,22 @@ app.include_router(websocket.router, tags=["🔌 WebSocket"])
 
 # ─── Modules stubs (import protégé) ─────────
 import importlib
+# ─── Zones d'influence ─────────────────────
+from app.api import zones_influence
+app.include_router(zones_influence.router, prefix="/api/v1", tags=["🗺️ Zones d'influence"])
+
+# ─── Itinéraires ────────────────────────────
+from app.api import itineraires
+app.include_router(itineraires.router, prefix="/api/v1", tags=["🧭 Itinéraires"])
+
+# ─── Import DWG ─────────────────────────────
+from app.api import import_dwg
+app.include_router(import_dwg.router, prefix="/api/v1", tags=["📥 Import DWG"])
+
+# ─── Modules stubs (import protégé) ─────────
 for mod_name, prefix, tags in [
     ("app.api.equipements",  "/api/v1", ["📦 Équipements"]),
     ("app.api.catalogue",    "/api/v1", ["📋 Catalogue"]),
-    ("app.api.import_dwg",   "/api/v1", ["📥 Import DWG"]),
-    ("app.api.itineraires",  "/api/v1", ["🧭 Itinéraires"]),
 ]:
     try:
         mod = importlib.import_module(mod_name)

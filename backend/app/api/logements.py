@@ -253,3 +253,37 @@ async def groupes_logement(
         ORDER BY ordre_affichage
     """)
     return [dict(r) for r in rows]
+
+@router.get("/{logement_id}")
+async def detail_logement(
+    logement_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    row = await db.fetchrow("""
+        SELECT l.*, ST_X(l.geom) AS longitude, ST_Y(l.geom) AS latitude,
+               tl.nom AS type_nom, gl.nom AS groupe_nom
+        FROM logement l
+        LEFT JOIN type_logement tl ON l.id_type_logement = tl.id
+        LEFT JOIN groupe_logement gl ON tl.id_groupe = gl.id
+        WHERE l.id = $1
+    """, logement_id)
+    if not row:
+        raise HTTPException(404, "Logement introuvable")
+    return dict(row)
+
+@router.delete("/{logement_id}")
+async def supprimer_logement(
+    logement_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user["role"] not in ["admin", "chef_projet"]:
+        raise HTTPException(403, "Permission refusée")
+    log = await db.fetchrow(
+        "SELECT id FROM logement WHERE id=$1", logement_id
+    )
+    if not log:
+        raise HTTPException(404, "Logement introuvable")
+    await db.execute("DELETE FROM logement WHERE id=$1", logement_id)
+    return {"status": "ok", "message": "Logement supprimé"}

@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     VERSION: str = "6.1.0"
     ENVIRONMENT: str = "production"
 
-    SECRET_KEY: str = "sig-ftth-secret-key-CHANGE-ME-in-railway-minimum-32chars!!"
+    SECRET_KEY: str = "86960f69b5f54a7f77c72a4a8255da8365e248a9ae711b48130d84a63a97acb5"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

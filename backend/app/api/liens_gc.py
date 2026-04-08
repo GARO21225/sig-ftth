@@ -116,6 +116,25 @@ async def liens_gc_geojson(
     """)
     return row['geojson']
 
+@router.get("/{lien_id}")
+async def detail_lien_gc(
+    lien_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    row = await db.fetchrow("""
+        SELECT lg.*, ST_AsGeoJSON(lg.geom)::json AS geom_json,
+               n1.nom_unique AS noeud_depart_nom,
+               n2.nom_unique AS noeud_arrivee_nom
+        FROM lien_gc lg
+        LEFT JOIN noeud_gc n1 ON lg.id_noeud_depart = n1.id
+        LEFT JOIN noeud_gc n2 ON lg.id_noeud_arrivee = n2.id
+        WHERE lg.id = $1
+    """, lien_id)
+    if not row:
+        raise HTTPException(404, "Lien GC introuvable")
+    return dict(row)
+
 @router.post("")
 async def creer_lien_gc(
     data: LienGCCreate,

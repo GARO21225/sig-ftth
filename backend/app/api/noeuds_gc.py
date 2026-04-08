@@ -162,9 +162,22 @@ async def creer_noeud_gc(
         data.nom_unique
     )
     if existe:
-        raise HTTPException(
-            400,
-            f"Un nœud GC '{data.nom_unique}' existe déjà"
+        raise HTTPException(400, f"Un nœud GC '{data.nom_unique}' existe déjà")
+
+    # Doublon spatial (< 1m)
+    doublon = await db.fetchrow("""
+        SELECT id, nom_unique,
+               ST_Distance(geom::geography,
+                   ST_SetSRID(ST_MakePoint($1,$2),4326)::geography) AS dist_m
+        FROM noeud_gc
+        WHERE ST_DWithin(geom::geography,
+            ST_SetSRID(ST_MakePoint($1,$2),4326)::geography, 1)
+        ORDER BY dist_m LIMIT 1
+    """, data.longitude, data.latitude)
+    if doublon:
+        raise HTTPException(400,
+            f"Doublon spatial : nœud GC '{doublon['nom_unique']}' "
+            f"à {round(doublon['dist_m'], 2)}m de ce point"
         )
 
     row = await db.fetchrow("""
