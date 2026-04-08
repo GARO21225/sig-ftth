@@ -11,6 +11,9 @@ RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+# ── Vérification critique : migrations doivent être présentes ──────────────
+RUN test -f app/core/migrations/schema.sql || (echo "❌ schema.sql ABSENT de l'image !" && exit 1)
+RUN test -f app/core/migrations/seed.sql   || (echo "❌ seed.sql ABSENT de l'image !"   && exit 1)
 RUN mkdir -p /app/uploads /app/logs
 
 # Script shell dédié → $PORT évalué au runtime

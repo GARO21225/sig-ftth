@@ -53,13 +53,23 @@ async def init_db():
             if not table_ok:
                 logger.warning("⚠️  Tables absentes — initialisation automatique…")
 
+                # ── Fix Railway : activer PostGIS/uuid-ossp en premier ────
+                try:
+                    await conn.execute('CREATE EXTENSION IF NOT EXISTS postgis;')
+                    await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+                    logger.info("✅ Extensions PostGIS + uuid-ossp activées")
+                except Exception as e:
+                    logger.error(f"❌ Impossible d'activer les extensions : {e}")
+                    raise
+
                 schema_file = MIGRATIONS_DIR / "schema.sql"
                 seed_file   = MIGRATIONS_DIR / "seed.sql"
 
                 if schema_file.exists():
                     await _run_sql_file(conn, schema_file)
                 else:
-                    logger.error("❌ schema.sql introuvable")
+                    logger.error("❌ schema.sql introuvable — chemin attendu : " + str(schema_file))
+                    raise FileNotFoundError(f"schema.sql absent : {schema_file}")
 
                 if seed_file.exists():
                     await _run_sql_file(conn, seed_file)
