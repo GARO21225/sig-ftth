@@ -12,6 +12,56 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2'
 import api from '@services/api'
 
+const exporterPDF = async () => {
+  try {
+    const res = await api.get('/analytics/rapport-pdf-data')
+    const d = res.data
+    const w = window.open('', '_blank')!
+    const date = new Date().toLocaleDateString('fr-FR')
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Rapport SIG FTTH — ${date}</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:900px;margin:0 auto}
+      h1{color:#1D4ED8;border-bottom:2px solid #1D4ED8;padding-bottom:8px}
+      h2{color:#374151;margin-top:24px}
+      .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0}
+      .kpi{background:#F3F4F6;border-radius:8px;padding:12px;text-align:center}
+      .kpi-val{font-size:28px;font-weight:700;color:#1D4ED8}
+      .kpi-label{font-size:12px;color:#6B7280}
+      table{width:100%;border-collapse:collapse;margin:12px 0}
+      th{background:#1D4ED8;color:white;padding:8px;font-size:12px}
+      td{padding:6px 8px;border-bottom:1px solid #E5E7EB;font-size:12px}
+      tr:nth-child(even){background:#F9FAFB}
+      .footer{margin-top:32px;text-align:center;color:#9CA3AF;font-size:11px}
+    </style></head><body>
+    <h1>📊 Rapport SIG FTTH — Orange CI</h1>
+    <p>Date : ${date} | Généré automatiquement</p>
+    <h2>KPI Réseau</h2>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-val">${d.kpi?.nb_noeuds_telecom||0}</div><div class="kpi-label">Nœuds télécom</div></div>
+      <div class="kpi"><div class="kpi-val">${d.kpi?.nb_liens_telecom||0}</div><div class="kpi-label">Câbles optiques</div></div>
+      <div class="kpi"><div class="kpi-val">${d.kpi?.total_logements||0}</div><div class="kpi-label">Logements</div></div>
+      <div class="kpi"><div class="kpi-val">${d.kpi?.el_raccordables||0}</div><div class="kpi-label">EL raccordables</div></div>
+      <div class="kpi"><div class="kpi-val">${d.kpi?.el_raccordes||0}</div><div class="kpi-label">EL raccordés</div></div>
+      <div class="kpi"><div class="kpi-val">${d.kpi?.ot_en_cours||0}</div><div class="kpi-label">OT en cours</div></div>
+    </div>
+    <h2>Nœuds à saturation critique</h2>
+    <table><tr><th>Nœud</th><th>Type</th><th>Saturation</th></tr>
+    ${(d.noeuds_critiques||[]).map((n: any) => `<tr><td>${n.nom_unique}</td><td>${n.type_noeud}</td><td style="color:${n.saturation_pct>=90?'red':'orange'}">${n.saturation_pct}%</td></tr>`).join('')}
+    </table>
+    <h2>Ordres de travail actifs</h2>
+    <table><tr><th>N° OT</th><th>Titre</th><th>Statut</th><th>Priorité</th></tr>
+    ${(d.ot_actifs||[]).map((o: any) => `<tr><td>${o.numero_ot}</td><td>${o.titre}</td><td>${o.statut}</td><td>${o.priorite}</td></tr>`).join('')}
+    </table>
+    <div class="footer">SIG FTTH v6.1 — Confidentiel Orange CI</div>
+    </body></html>`)
+    w.document.close()
+    setTimeout(() => w.print(), 500)
+  } catch (e) {
+    alert('Erreur génération rapport')
+  }
+}
+
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
 
 interface KPI {
@@ -192,12 +242,16 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-white">📊 Dashboard FTTH</h1>
           <p className="text-gray-400 text-sm mt-1">Vue d'ensemble du réseau fibre optique</p>
         </div>
-        <button
-          onClick={chargerDonnees}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-300 transition-all"
-        >
-          🔄 Actualiser
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exporterPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-600 border border-blue-600 rounded-xl text-sm text-white transition-all font-medium">
+            📄 Rapport PDF
+          </button>
+          <button onClick={chargerDonnees}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-300 transition-all">
+            🔄 Actualiser
+          </button>
+        </div>
       </div>
 
       {/* ── Erreur ───────────────────────── */}

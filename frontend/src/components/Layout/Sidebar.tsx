@@ -49,6 +49,13 @@ const MENU = [
     desc: 'Équipements'
   },
   {
+    path: '/analytics',
+    icon: '📈',
+    label: 'Analytics',
+    roles: ['admin','chef_projet','analyste'],
+    desc: 'Saturation & prédictions'
+  },
+  {
     path: '/import-dwg',
     icon: '📥',
     label: 'Import DWG',

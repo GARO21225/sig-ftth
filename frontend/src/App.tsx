@@ -25,6 +25,8 @@ const TerrainMobilePage   = lazy(() => import('@pages/TerrainMobilePage'))
 const CataloguePage       = lazy(() => import('@pages/CataloguePage'))
 const AdminPage           = lazy(() => import('@pages/AdminPage'))
 const ImportDWGPage       = lazy(() => import('@pages/ImportDWGPage'))
+const ScanPage            = lazy(() => import('@pages/ScanPage'))
+const AnalyticsPage       = lazy(() => import('@pages/AnalyticsPage'))
 
 function Loader() {
   return (
@@ -55,6 +57,7 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/scan/:id" element={<ScanPage />} />
       <Route path="/mot-de-passe-oublie" element={<MotDePasseOubliePage />} />
       <Route path="/reset-password"      element={<ResetPasswordPage />} />
       <Route
@@ -81,6 +84,7 @@ function AppContent() {
             <PrivateRoute roles={['admin']}><AdminPage /></PrivateRoute>
           }
         />
+        <Route path="analytics" element={<PrivateRoute roles={['admin','chef_projet','analyste']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="import-dwg"
           element={
             <PrivateRoute roles={['admin','chef_projet','technicien']}>

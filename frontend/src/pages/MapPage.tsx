@@ -64,6 +64,11 @@ export default function MapPage() {
   const [editMode,      setEditMode]      = useState<EditMode>(null)
   // Panneaux liens / zones / itinéraires
   const [showLienForm,     setShowLienForm]     = useState<'lien_telecom'|'lien_gc'|null>(null)
+  const [zonesData,        setZonesData]        = useState<any[]>([])
+  const [showHeatmap,      setShowHeatmap]      = useState(false)
+  const [heatmapData,      setHeatmapData]      = useState<any[]>([])
+  const [showSaturation,   setShowSaturation]   = useState(false)
+  const [saturationData,   setSaturationData]   = useState<any[]>([])
   const [showZones,        setShowZones]        = useState(false)
   const [showItineraires,  setShowItineraires]  = useState(false)
   const [draftPoint,    setDraftPoint]    = useState<[number,number]|null>(null)
@@ -85,6 +90,7 @@ export default function MapPage() {
       { key: 'liens-telecom',  fn: () => api.get('/liens-telecom') },
       { key: 'liens-gc',       fn: () => api.get('/liens-gc') },
       { key: 'logements',      fn: () => api.get('/logements') },
+      { key: 'zones',          fn: () => api.get('/zones-influence') },
     ]
     const results = await Promise.allSettled(requests.map(r => r.fn()))
     const newErrors: string[] = []
@@ -97,6 +103,7 @@ export default function MapPage() {
         if (key === 'liens-telecom')  setLiens(data)
         if (key === 'liens-gc')       setLiensGC(data)
         if (key === 'logements')      setLogements(data)
+        if (key === 'zones')          setZonesData(data)
       } else { newErrors.push(key) }
     })
     setErrors(newErrors); setLoading(false)
@@ -106,6 +113,22 @@ export default function MapPage() {
     setEditMode(mode); setDraftPoint(null); setDraftForm({})
     setShowEditPanel(true); setSelected(null)
     if (mode) toast(`Mode création — cliquez sur la carte`, { icon: '✏️', duration: 3000 })
+  }
+
+  const chargerHeatmap = async () => {
+    try {
+      const res = await api.get('/analytics/heatmap-el')
+      setHeatmapData(res.data.data || [])
+      setShowHeatmap(true)
+    } catch { setShowHeatmap(false) }
+  }
+
+  const chargerSaturation = async () => {
+    try {
+      const res = await api.get('/analytics/saturation-noeuds')
+      setSaturationData(res.data.noeuds || [])
+      setShowSaturation(true)
+    } catch {}
   }
 
   const annulerEdition = () => {
@@ -199,6 +222,44 @@ export default function MapPage() {
               onClick={() => setSelected({ ...l, _type: 'lien_telecom' })} />
           : null)}
 
+        {/* Zones d'influence — polygones GeoJSON */}
+        {zonesData.map((zone: any) => {
+          if (!zone.geom?.coordinates) return null
+          const coords = zone.geom.coordinates[0]?.map(([lng,lat]: number[]) => [lat,lng] as [number,number])
+          if (!coords) return null
+          return (
+            <Polyline key={zone.id} positions={coords}
+              pathOptions={{ color: '#1D9E75', weight: 2, opacity: 0.8, fillColor: '#1D9E75', fillOpacity: 0.08, fill: true }}>
+              <Popup>
+                <div style={{minWidth:160}}>
+                  <div style={{fontWeight:'bold',fontSize:13}}>🗺️ {zone.nom}</div>
+                  <div style={{fontSize:11,color:'#666',marginTop:4}}>
+                    <div>Type : {zone.type_zone}</div>
+                    <div>Clients : {zone.nb_clients_actifs || 0}</div>
+                    {zone.superficie_km2 && <div>Surface : {Number(zone.superficie_km2).toFixed(2)} km²</div>}
+                  </div>
+                </div>
+              </Popup>
+            </Polyline>
+          )
+        })}
+
+        {/* Saturation — nœuds critiques en rouge */}
+        {showSaturation && saturationData.map((n: any) => (
+          <Marker key={'sat-'+n.id} position={[n.latitude, n.longitude]}
+            icon={makeIcon(n.saturation_pct >= 90 ? '#DC2626' : '#F59E0B', '⚠️', 28)}>
+            <Popup>
+              <div style={{minWidth:160}}>
+                <div style={{fontWeight:'bold',fontSize:12}}>⚠️ {n.nom_unique}</div>
+                <div style={{fontSize:12,marginTop:4}}>
+                  Saturation : <b style={{color: n.saturation_pct>=90?'#DC2626':'#F59E0B'}}>{n.saturation_pct}%</b>
+                </div>
+                <div style={{fontSize:11,color:'#666'}}>{n.nb_fibres_utilisees}/{n.capacite_fibres_max} fibres</div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
         {layers.lien_gc && liensGC.map(l => l.geom?.coordinates
           ? <LienGCLayer key={l.id} lien={l}
               onClick={() => setSelected({ ...l, _type: 'lien_gc' })} />
@@ -284,6 +345,20 @@ export default function MapPage() {
                   {val.label}
                 </button>
               ))}
+            </div>
+            {/* Analytiques */}
+            <div className="p-3 border-t border-gray-700">
+              <p className="text-xs text-gray-500 mb-2 px-1">📈 Analytiques</p>
+              <div className="flex flex-col gap-1">
+                <button onClick={() => showHeatmap ? setShowHeatmap(false) : chargerHeatmap()}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${showHeatmap ? 'bg-red-900/50 text-red-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                  🌡️ {showHeatmap ? 'Masquer' : 'Afficher'} heatmap EL
+                </button>
+                <button onClick={() => showSaturation ? setShowSaturation(false) : chargerSaturation()}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${showSaturation ? 'bg-orange-900/50 text-orange-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                  ⚠️ {showSaturation ? 'Masquer' : 'Afficher'} saturation
+                </button>
+              </div>
             </div>
           </div>
         </div>

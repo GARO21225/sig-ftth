@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { authApi } from '@services/api'
+import api from '@services/api'
 import api from '@services/api'
 import toast from 'react-hot-toast'
 
@@ -15,7 +15,11 @@ const ROLE_COLORS: Record<string,string> = {
 export default function AdminPage() {
   const [users,       setUsers]       = useState<User[]>([])
   const [loading,     setLoading]     = useState(true)
-  const [tab,         setTab]         = useState<'users'|'system'>('users')
+  const [tab,         setTab]         = useState<'users'|'system'|'api'>('users')
+  const [cles,        setCles]        = useState<any[]>([])
+  const [creatingCle, setCreatingCle] = useState(false)
+  const [cleForm,     setCleForm]     = useState({ nom_client:'', email_contact:'', quota_jour:1000 })
+  const [nouvelleCle, setNouvelleCle] = useState<string|null>(null)
   const [search,      setSearch]      = useState('')
   const [creating,    setCreating]    = useState(false)
   const [form, setForm] = useState({ email:'', nom:'', prenom:'', role:'technicien', mot_de_passe:'' })
@@ -24,11 +28,29 @@ export default function AdminPage() {
 
   useEffect(() => { charger() }, [])
 
+  const chargerCles = async () => {
+    try {
+      const r = await api.get('/api-keys')
+      setCles(r.data || [])
+    } catch {}
+  }
+
+  const creerCle = async () => {
+    if (!cleForm.nom_client) return toast.error('Nom client requis')
+    try {
+      const r = await api.post('/api-keys', cleForm)
+      setNouvelleCle(r.data.cle)
+      setCreatingCle(false)
+      chargerCles()
+      toast.success('Clé API créée')
+    } catch (e: any) { toast.error(e.response?.data?.detail || 'Erreur') }
+  }
+
   const charger = async () => {
     setLoading(true)
     try {
       const [rUsers, rHealth] = await Promise.allSettled([
-        authApi.get('/utilisateurs', { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }),
+        api.get('/auth/utilisateurs'),
         fetch('/health').then(r => r.json())
       ])
       if (rUsers.status === 'fulfilled') setUsers(rUsers.value.data || [])
@@ -43,9 +65,7 @@ export default function AdminPage() {
       return toast.error('Tous les champs sont requis')
     setSaving(true)
     try {
-      await authApi.post('/creer-utilisateur', form, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-      })
+      await api.post('/auth/creer-utilisateur', form)
       toast.success(`Utilisateur ${form.email} créé`)
       setCreating(false)
       setForm({ email:'', nom:'', prenom:'', role:'technicien', mot_de_passe:'' })
@@ -72,7 +92,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-gray-900 border border-gray-700 rounded-xl p-1 w-fit">
-          {([['users','👥 Utilisateurs'],['system','🖥️ Système']] as const).map(([t, label]) => (
+          {([['users','👥 Utilisateurs'],['system','🖥️ Système'],['api','🔑 Clés API']] as const).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab===t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>
               {label}
@@ -160,6 +180,81 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab API Keys */}
+        {tab === 'api' && (
+          <div>
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1"></div>
+              <button onClick={() => setCreatingCle(!creatingCle)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${creatingCle ? 'bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>
+                {creatingCle ? '✕ Annuler' : '+ Nouvelle clé'}
+              </button>
+              <button onClick={chargerCles} className="px-3 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm">🔄</button>
+            </div>
+            {nouvelleCle && (
+              <div className="bg-green-900/30 border border-green-600/50 rounded-2xl p-4 mb-4">
+                <p className="text-green-300 text-sm font-medium mb-2">✅ Clé créée — copiez-la maintenant !</p>
+                <code className="text-xs text-white bg-gray-900 px-3 py-2 rounded-xl block break-all">{nouvelleCle}</code>
+                <button onClick={() => {navigator.clipboard.writeText(nouvelleCle); toast.success('Clé copiée')}}
+                  className="mt-2 px-3 py-1.5 bg-green-700 text-white text-xs rounded-xl">📋 Copier</button>
+              </div>
+            )}
+            {creatingCle && (
+              <div className="bg-gray-900 border border-amber-600/50 rounded-2xl p-4 mb-4">
+                <div className="space-y-3">
+                  <div><label className="block text-xs text-gray-400 mb-1">Nom client *</label>
+                    <input value={cleForm.nom_client} onChange={e => setCleForm(f => ({...f, nom_client: e.target.value}))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500" placeholder="ex: QGIS Orange CI" />
+                  </div>
+                  <div><label className="block text-xs text-gray-400 mb-1">Email contact</label>
+                    <input value={cleForm.email_contact} onChange={e => setCleForm(f => ({...f, email_contact: e.target.value}))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500" placeholder="contact@client.ci" />
+                  </div>
+                  <div><label className="block text-xs text-gray-400 mb-1">Quota / jour</label>
+                    <input type="number" value={cleForm.quota_jour} onChange={e => setCleForm(f => ({...f, quota_jour: parseInt(e.target.value)}))}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500" />
+                  </div>
+                  <button onClick={creerCle} className="w-full py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-xl">✅ Créer la clé</button>
+                </div>
+              </div>
+            )}
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-700"><h2 className="font-semibold text-white text-sm">Clés actives ({cles.length})</h2></div>
+              {cles.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">
+                  <p>Aucune clé API créée</p>
+                  <p className="text-xs mt-1">Usage : header X-API-Key dans QGIS / Power BI</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-800">
+                  {cles.map((cle: any) => (
+                    <div key={cle.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800/50">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">{cle.nom_client}</p>
+                        <code className="text-xs text-gray-500">{cle.cle_masquee}</code>
+                      </div>
+                      <div className="text-right text-xs">
+                        <p className="text-gray-300">{cle.nb_appels_jour}/{cle.quota_jour} appels/j</p>
+                        <p className={cle.actif ? 'text-green-400' : 'text-red-400'}>{cle.actif ? 'Active' : 'Révoquée'}</p>
+                      </div>
+                      {cle.actif && (
+                        <button onClick={async () => { await api.delete(`/api-keys/${cle.id}`); chargerCles(); toast.success('Clé révoquée') }}
+                          className="px-2 py-1 bg-red-900/50 text-red-400 text-xs rounded-lg hover:bg-red-900">Révoquer</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-4 bg-gray-900 border border-gray-700 rounded-2xl p-4 text-xs text-gray-400 space-y-1">
+              <p className="font-medium text-gray-300">📖 Utilisation dans QGIS</p>
+              <p>1. Layer → Add Layer → WFS/API</p>
+              <p>2. URL: https://sig-ftth-production-a3aa.up.railway.app/api/v1/public/noeuds-telecom</p>
+              <p>3. Header: X-API-Key: <span className="text-yellow-400">votre-clé</span></p>
             </div>
           </div>
         )}

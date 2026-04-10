@@ -12,6 +12,8 @@ export default function TerrainMobilePage() {
   const [lastSaved, setLastSaved] = useState<string | null>(null)
   const [offline,   setOffline]   = useState(!navigator.onLine)
   const [queue,     setQueue]     = useState<any[]>([])
+  const [voixActive,  setVoixActive]  = useState(false)
+  const [voixTexte,   setVoixTexte]   = useState('')
 
   useEffect(() => {
     const onOnline  = () => { setOffline(false); syncQueue() }
@@ -96,6 +98,33 @@ export default function TerrainMobilePage() {
     if (ok > 0) toast.success(`${ok} nœud(s) synchronisé(s)`)
   }
 
+  const activerVoix = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Commandes vocales non supportées sur ce navigateur')
+      return
+    }
+    const recog = new SpeechRecognition()
+    recog.lang = 'fr-FR'
+    recog.interimResults = false
+    recog.onstart = () => setVoixActive(true)
+    recog.onend = () => setVoixActive(false)
+    recog.onerror = () => setVoixActive(false)
+    recog.onresult = (e: any) => {
+      const texte = e.results[0][0].transcript.toLowerCase()
+      setVoixTexte(texte)
+      // Parser la commande : "créer [TYPE] [NOM]"
+      const match = texte.match(/cr[eé]er\s+(nro|sro|pbo|pto|pm|l1t|l2t|l4t|poteau)\s+(.+)/i)
+      if (match) {
+        const type = match[1].toUpperCase()
+        const nom = match[2].trim().toUpperCase().replace(/\s+/g, '-')
+        setForm(f => ({ ...f, type_noeud: type, nom_unique: nom }))
+        if (navigator.vibrate) navigator.vibrate(200)
+      }
+    }
+    recog.start()
+  }
+
   const TYPES_TERRAIN = ['NRO','SRO','PBO','PTO','PM','L1T','L2T','L4T','POTEAU']
 
   return (
@@ -111,6 +140,18 @@ export default function TerrainMobilePage() {
           <div className={`px-2 py-1 rounded-lg text-xs font-medium ${offline ? 'bg-orange-900 text-orange-300' : 'bg-green-900 text-green-300'}`}>
             {offline ? '📵 Hors-ligne' : '🌐 En ligne'}
           </div>
+        </div>
+
+        {/* Commandes vocales */}
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-3 mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-white">🎤 Commandes vocales</p>
+            <p className="text-xs text-gray-400">{voixTexte || 'Dites : "créer PBO NOM-01"'}</p>
+          </div>
+          <button onClick={activerVoix}
+            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${voixActive ? 'bg-red-700 text-white' : 'bg-purple-800 hover:bg-purple-700 text-white'}`}>
+            {voixActive ? '🔴 Écoute...' : '🎤 Activer'}
+          </button>
         </div>
 
         {/* GPS */}
