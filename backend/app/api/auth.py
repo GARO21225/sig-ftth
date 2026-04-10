@@ -332,3 +332,78 @@ async def get_me(
     if not user:
         raise HTTPException(404, "Utilisateur non trouvé")
     return dict(user)
+
+# ─────────────────────────────────────────────
+# ENDPOINT : Liste utilisateurs (admin)
+# ─────────────────────────────────────────────
+
+@router.get("/utilisateurs")
+async def lister_utilisateurs(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user['role'] != 'admin':
+        raise HTTPException(403, "Réservé aux administrateurs")
+    rows = await db.fetch("""
+        SELECT id, email, nom, prenom, role, actif,
+               date_creation, date_derniere_connexion
+        FROM utilisateur
+        ORDER BY date_creation DESC
+    """)
+    return [dict(r) for r in rows]
+
+
+# ─────────────────────────────────────────────
+# ENDPOINT : Créer utilisateur (admin)
+# ─────────────────────────────────────────────
+
+class CreerUtilisateurSchema(BaseModel):
+    email: str
+    nom: str
+    prenom: str
+    role: str = 'technicien'
+    mot_de_passe: str
+
+@router.post("/creer-utilisateur")
+async def creer_utilisateur(
+    data: CreerUtilisateurSchema,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user['role'] != 'admin':
+        raise HTTPException(403, "Réservé aux administrateurs")
+    if not valider_email(data.email):
+        raise HTTPException(400, "Email invalide")
+    force = valider_force_mdp(data.mot_de_passe)
+    if not force['valide']:
+        raise HTTPException(400, f"Mot de passe faible : {', '.join(force['erreurs'])}")
+    existe = await db.fetchrow("SELECT id FROM utilisateur WHERE email=$1", data.email)
+    if existe:
+        raise HTTPException(400, f"Email '{data.email}' déjà utilisé")
+    from app.core.security import hasher_mdp
+    hash_mdp = hasher_mdp(data.mot_de_passe)
+    row = await db.fetchrow("""
+        INSERT INTO utilisateur (email, mot_de_passe_hash, nom, prenom, role, actif, email_verifie)
+        VALUES ($1,$2,$3,$4,$5,TRUE,TRUE)
+        RETURNING id, email, nom, prenom, role
+    """, data.email, hash_mdp, data.nom, data.prenom, data.role)
+    return {"message": "Utilisateur créé", "utilisateur": dict(row)}
+
+
+# ─────────────────────────────────────────────
+# ENDPOINT : Activer / Désactiver utilisateur
+# ─────────────────────────────────────────────
+
+@router.put("/utilisateurs/{user_id}/actif")
+async def toggle_actif(
+    user_id: str,
+    actif: bool,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user['role'] != 'admin':
+        raise HTTPException(403, "Réservé aux administrateurs")
+    if current_user['sub'] == user_id:
+        raise HTTPException(400, "Impossible de modifier son propre compte")
+    await db.execute("UPDATE utilisateur SET actif=$1 WHERE id=$2", actif, user_id)
+    return {"status": "ok", "actif": actif}

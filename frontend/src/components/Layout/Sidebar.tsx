@@ -49,6 +49,13 @@ const MENU = [
     desc: 'Équipements'
   },
   {
+    path: '/import-dwg',
+    icon: '📥',
+    label: 'Import DWG',
+    roles: ['admin','chef_projet','technicien'],
+    desc: 'Import GeoJSON/DWG'
+  },
+  {
     path: '/admin',
     icon: '⚙️',
     label: 'Admin',

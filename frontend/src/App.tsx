@@ -24,6 +24,7 @@ const EligibilitePage     = lazy(() => import('@pages/EligibilitePage'))
 const TerrainMobilePage   = lazy(() => import('@pages/TerrainMobilePage'))
 const CataloguePage       = lazy(() => import('@pages/CataloguePage'))
 const AdminPage           = lazy(() => import('@pages/AdminPage'))
+const ImportDWGPage       = lazy(() => import('@pages/ImportDWGPage'))
 
 function Loader() {
   return (
@@ -78,6 +79,13 @@ function AppContent() {
         <Route path="admin"
           element={
             <PrivateRoute roles={['admin']}><AdminPage /></PrivateRoute>
+          }
+        />
+        <Route path="import-dwg"
+          element={
+            <PrivateRoute roles={['admin','chef_projet','technicien']}>
+              <ImportDWGPage />
+            </PrivateRoute>
           }
         />
       </Route>

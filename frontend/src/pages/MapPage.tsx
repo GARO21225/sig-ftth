@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { PanneauCreerLien, PanneauZones, PanneauItineraires } from './MapPage_liens_zones'
 import {
   MapContainer, TileLayer, Marker, Polyline,
   Popup, useMap, useMapEvents,
@@ -61,6 +62,10 @@ export default function MapPage() {
 
   // Mode édition
   const [editMode,      setEditMode]      = useState<EditMode>(null)
+  // Panneaux liens / zones / itinéraires
+  const [showLienForm,     setShowLienForm]     = useState<'lien_telecom'|'lien_gc'|null>(null)
+  const [showZones,        setShowZones]        = useState(false)
+  const [showItineraires,  setShowItineraires]  = useState(false)
   const [draftPoint,    setDraftPoint]    = useState<[number,number]|null>(null)
   const [draftForm,     setDraftForm]     = useState<any>({})
   const [savingDraft,   setSavingDraft]   = useState(false)
@@ -313,7 +318,29 @@ export default function MapPage() {
                 </button>
               ))}
             </div>
-          )}
+            {/* Boutons liens + outils supplémentaires */}
+            {!editMode && (
+              <div className="bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-2xl shadow-2xl p-2 flex flex-col gap-1 mt-1">
+                <p className="text-xs text-gray-500 px-2 py-1">🔗 Liens</p>
+                <button onClick={() => setShowLienForm('lien_telecom')}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-blue-900/50 text-gray-300 hover:text-blue-300 text-xs rounded-xl transition-all">
+                  <span>〰️</span><span>Lien télécom</span>
+                </button>
+                <button onClick={() => setShowLienForm('lien_gc')}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-amber-900/50 text-gray-300 hover:text-amber-300 text-xs rounded-xl transition-all">
+                  <span>⚡</span><span>Lien GC</span>
+                </button>
+                <p className="text-xs text-gray-500 px-2 py-1 mt-1">🛠️ Outils</p>
+                <button onClick={() => setShowZones(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-teal-900/50 text-gray-300 hover:text-teal-300 text-xs rounded-xl transition-all">
+                  <span>🗺️</span><span>Zones</span>
+                </button>
+                <button onClick={() => setShowItineraires(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-purple-900/50 text-gray-300 hover:text-purple-300 text-xs rounded-xl transition-all">
+                  <span>🧭</span><span>Itinéraires</span>
+                </button>
+              </div>
+            )}
         </div>
       )}
 
@@ -392,6 +419,19 @@ export default function MapPage() {
           </div>
         )}
       </div>
+
+      {/* Panneaux flottants */}
+      {showLienForm && (
+        <PanneauCreerLien
+          mode={showLienForm}
+          noeuds={noeuds}
+          noeudsGC={noeudsGC}
+          onClose={() => setShowLienForm(null)}
+          onSaved={() => { setShowLienForm(null); chargerDonnees() }}
+        />
+      )}
+      {showZones && <PanneauZones onClose={() => setShowZones(false)} />}
+      {showItineraires && <PanneauItineraires onClose={() => setShowItineraires(false)} />}
 
       {loading && (
         <div className="absolute inset-0 z-[2000] bg-gray-950/80 backdrop-blur-sm flex items-center justify-center">
