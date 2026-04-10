@@ -271,3 +271,71 @@ async def integrer_import(
         "liens_inseres": liens_ok,
         "erreurs": erreurs
     }
+
+
+@router.post("/normaliser-ia")
+async def normaliser_couches_ia(
+    current_user: dict = Depends(get_current_user),
+    geojson_content: str = Form(...),
+):
+    """
+    Normalisation intelligente des couches DWG via fuzzy matching.
+    Déduit automatiquement le type de nœud selon le nom de la couche.
+    """
+    try:
+        from rapidfuzz import process, fuzz
+    except ImportError:
+        raise HTTPException(501, "rapidfuzz non installé")
+
+    DICTIONNAIRE_FTTH = {
+        "NRO": ["NRO","NOEUD_RACCORDEMENT","NODE_OLT","NRO_","CENTRAL"],
+        "SRO": ["SRO","SOUS_REPARTITEUR","SUBREPART","PM_DIST"],
+        "PBO": ["PBO","POINT_BRANCHEMENT","PB","BOITIER","SPLICE"],
+        "PTO": ["PTO","PRISE_TERMINALE","ONT","MODEM","TERMINAISON"],
+        "PM": ["PM","POINT_MUTUALISATION","MUTU","PMZ"],
+        "CAB_OPT": ["CABLE","OPTIQUE","FIBRE","TRUNK","FEEDER","DISTRIB"],
+        "L1T": ["L1T","CHAMBRE_L1","CHAMBRE1","CH_L1"],
+        "L2T": ["L2T","CHAMBRE_L2","CHAMBRE2","CH_L2"],
+        "L4T": ["L4T","CHAMBRE_L4","CHAMBRE4"],
+        "FOURREAU": ["FOURREAU","CONDUITE","GAINE","PIPE"],
+        "POTEAU": ["POTEAU","APPUI","PYLONE","MAST"],
+    }
+
+    try:
+        data = json.loads(geojson_content)
+    except Exception:
+        raise HTTPException(400, "JSON invalide")
+
+    features = data.get("features", [])
+    resultats = []
+
+    for feature in features:
+        props = feature.get("properties", {}) or {}
+        nom_couche = (
+            props.get("layer") or props.get("nom_couche") or
+            props.get("Layer") or props.get("NAME") or
+            props.get("nom_unique") or "inconnu"
+        ).upper().replace(" ", "_").replace("-", "_")
+
+        best_type, best_score = "inconnu", 0
+        for type_code, synonymes in DICTIONNAIRE_FTTH.items():
+            score = process.extractOne(nom_couche, synonymes, scorer=fuzz.token_sort_ratio)
+            if score and score[1] > best_score:
+                best_score = score[1]
+                best_type = type_code
+
+        resultats.append({
+            "nom_couche_original": props.get("layer") or props.get("nom_couche") or "?",
+            "type_deduit": best_type if best_score >= 55 else "non_reconnu",
+            "confiance_pct": best_score,
+            "geometrie": feature.get("geometry", {}).get("type"),
+        })
+
+    types_reconnus = sum(1 for r in resultats if r["type_deduit"] != "non_reconnu")
+    return {
+        "total_features": len(features),
+        "types_reconnus": types_reconnus,
+        "taux_reconnaissance_pct": round(types_reconnus/max(len(features),1)*100, 1),
+        "resultats": resultats,
+        "dictionnaire_utilise": list(DICTIONNAIRE_FTTH.keys())
+    }

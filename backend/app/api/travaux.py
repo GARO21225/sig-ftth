@@ -369,3 +369,52 @@ async def marquer_alerte_lue(
         alerte_id
     )
     return {"message": "Alerte marquée comme lue"}
+
+
+# ─── RÉCEPTION TRAVAUX ──────────────────────────────────────────
+
+class ReceptionSchema(BaseModel):
+    id_ot: str
+    observations: Optional[str] = None
+    conformite: bool = True
+    reserves: Optional[str] = None
+    date_reception: Optional[str] = None
+
+@router.post("/reception")
+async def creer_reception(
+    data: ReceptionSchema,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Enregistre la réception finale d'un OT."""
+    if current_user['role'] not in ['admin','chef_projet']:
+        raise HTTPException(403, "Réservé admin/chef de projet")
+    ot = await db.fetchrow("SELECT id, statut FROM ordre_travail WHERE id=$1", data.id_ot)
+    if not ot: raise HTTPException(404, "OT introuvable")
+
+    row = await db.fetchrow("""
+        INSERT INTO reception_travaux
+            (id_ot, receptionnaire, observations, conforme, reserves)
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING id, id_ot, date_reception
+    """, data.id_ot, current_user['sub'],
+        data.observations, data.conformite, data.reserves)
+
+    # Clôturer l'OT
+    await db.execute(
+        "UPDATE ordre_travail SET statut='cloture', avancement_pct=100 WHERE id=$1",
+        data.id_ot
+    )
+    return {"status":"ok","reception_id":str(row["id"]),"message":"OT clôturé et réceptionné"}
+
+@router.get("/reception/{ot_id}")
+async def detail_reception(ot_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
+    row = await db.fetchrow("""
+        SELECT r.*, u.email AS receptionnaire_email
+        FROM reception_travaux r
+        LEFT JOIN utilisateur u ON r.receptionnaire = u.id
+        WHERE r.id_ot = $1
+        ORDER BY r.date_reception DESC LIMIT 1
+    """, ot_id)
+    if not row: raise HTTPException(404, "Aucune réception pour cet OT")
+    return dict(row)

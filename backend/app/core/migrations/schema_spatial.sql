@@ -147,7 +147,8 @@ INSERT INTO groupe_logement
     (code, nom, icone, couleur, ordre_affichage)
 VALUES
     ('PAVILLON','Pavillon','🏠','#F59E0B',1),
-    ('IMMEUBLE','Immeuble','🏢','#3B82F6',2);
+    ('IMMEUBLE','Immeuble','🏢','#3B82F6',2)
+ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS type_logement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -186,7 +187,8 @@ FROM groupe_logement g,
     ('VILLA_CLOTUREE','Villa clôturée',
      1.0,45.0,1,'🏰','#92400E')
 ) AS v(code,nom,el,taux,log,icone,couleur)
-WHERE g.code = 'PAVILLON';
+WHERE g.code = 'PAVILLON'
+ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO type_logement
     (id_groupe, code, nom, el_moyen,
@@ -211,7 +213,8 @@ FROM groupe_logement g,
     ('CITE_OUVRIERE','Cité ouvrière',
      48.0,20.0,48,'🏗️','#1E40AF')
 ) AS v(code,nom,el,taux,log,icone,couleur)
-WHERE g.code = 'IMMEUBLE';
+WHERE g.code = 'IMMEUBLE'
+ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS logement (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -638,6 +641,45 @@ CREATE TABLE IF NOT EXISTS notification_email (
     date_envoi TIMESTAMP,
     date_creation TIMESTAMP DEFAULT NOW()
 );
+
+
+-- ============================================
+-- MODULE 12 : PHOTOS ÉQUIPEMENTS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS photo_equipement (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id_noeud UUID REFERENCES noeud_telecom(id) ON DELETE CASCADE,
+    id_noeud_gc UUID REFERENCES noeud_gc(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    nom_fichier VARCHAR(255),
+    latitude DECIMAL(10,7),
+    longitude DECIMAL(10,7),
+    commentaire TEXT,
+    auteur UUID REFERENCES utilisateur(id),
+    date_creation TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_photo_noeud ON photo_equipement(id_noeud);
+
+-- ============================================
+-- MODULE 13 : API PUBLIQUE — CLÉS API
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cle VARCHAR(64) UNIQUE NOT NULL,
+    nom_client VARCHAR(150) NOT NULL,
+    email_contact VARCHAR(255),
+    permissions JSONB DEFAULT '["read"]',
+    quota_jour INTEGER DEFAULT 1000,
+    nb_appels_jour INTEGER DEFAULT 0,
+    date_reset_quota DATE DEFAULT CURRENT_DATE,
+    actif BOOLEAN DEFAULT TRUE,
+    cree_par UUID REFERENCES utilisateur(id),
+    date_creation TIMESTAMP DEFAULT NOW(),
+    date_derniere_utilisation TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_cle ON api_keys(cle);
 
 -- ============================================
 -- TRIGGERS

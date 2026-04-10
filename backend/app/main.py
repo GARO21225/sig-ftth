@@ -110,10 +110,22 @@ app.include_router(itineraires.router, prefix="/api/v1", tags=["🧭 Itinéraire
 from app.api import import_dwg
 app.include_router(import_dwg.router, prefix="/api/v1", tags=["📥 Import DWG"])
 
+# ─── Équipements (CRUD complet + QR + photos) ──
+from app.api import equipements
+app.include_router(equipements.equip_router, prefix="/api/v1", tags=["📦 Équipements"])
+
+# ─── Analytics (heatmap, prédictions, PDF) ──
+from app.api import analytics
+app.include_router(analytics.router, prefix="/api/v1", tags=["📈 Analytics"])
+
+# ─── API Publique + clés ─────────────────────
+from app.api import api_publique
+app.include_router(api_publique.router, prefix="/api/v1", tags=["🔌 API Publique"])
+app.include_router(api_publique.admin_router, prefix="/api/v1", tags=["🔑 Gestion clés API"])
+
 # ─── Modules stubs (import protégé) ─────────
 for mod_name, prefix, tags in [
-    ("app.api.equipements",  "/api/v1", ["📦 Équipements"]),
-    ("app.api.catalogue",    "/api/v1", ["📋 Catalogue"]),
+    ("app.api.catalogue", "/api/v1", ["📋 Catalogue"]),
 ]:
     try:
         mod = importlib.import_module(mod_name)
