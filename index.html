@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIG FTTH</title>
+    <!-- Restauration URL SPA après redirect 404 GitHub Pages -->
+    <script>
+      (function () {
+        var q = window.location.search;
+        if (q) {
+          var p = q.match(/[?&]p=([^&]+)/);
+          if (p) {
+            var path = decodeURIComponent(p[1]).replace(/~and~/g, '&');
+            var qm = q.match(/&q=([^&]+)/);
+            var qs = qm ? '?' + decodeURIComponent(qm[1]).replace(/~and~/g, '&') : '';
+            window.history.replaceState(null, null, '/sig-ftth/' + path + qs + window.location.hash);
+          }
+        }
+        var r = sessionStorage.redirect;
+        if (r) { delete sessionStorage.redirect; window.history.replaceState(null, null, r); }
+      })();
+    </script>
+    <meta http-equiv="refresh" content="0; url=./frontend/dist/index.html" />
+  </head>
+  <body>
+    <p style="font-family:sans-serif;text-align:center;padding:3rem;color:#64748b">
+      Chargement SIG FTTH…
+    </p>
+  </body>
+</html>
