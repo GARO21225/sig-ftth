@@ -24,6 +24,13 @@ class OTCreate(BaseModel):
     cout_estime: Optional[float] = None
     devise: Optional[str] = "XOF"
     commentaire: Optional[str] = None
+    prestataire: Optional[str] = None
+    prestataire_contact: Optional[str] = None
+    prestataire_zone: Optional[str] = None
+    chef_equipe: Optional[str] = None
+    equipe_membres: Optional[List[str]] = None
+    nature_travaux: Optional[str] = None
+    statut: Optional[str] = None
 
 class OTUpdate(BaseModel):
     titre: Optional[str] = None
@@ -34,6 +41,15 @@ class OTUpdate(BaseModel):
     date_fin_reelle: Optional[str] = None
     cout_reel: Optional[float] = None
     commentaire: Optional[str] = None
+    prestataire: Optional[str] = None
+    prestataire_contact: Optional[str] = None
+    prestataire_zone: Optional[str] = None
+    chef_equipe: Optional[str] = None
+    equipe_membres: Optional[List[str]] = None
+    nature_travaux: Optional[str] = None
+    date_debut_prevue: Optional[str] = None
+    date_fin_prevue: Optional[str] = None
+    cout_estime: Optional[float] = None
 
 class TacheCreate(BaseModel):
     id_ot: str
