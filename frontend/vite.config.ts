@@ -1,45 +1,27 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// Base URL : /sig-ftth/ sur GitHub Pages, / en local
-const base = process.env.GITHUB_PAGES === 'true' ? '/sig-ftth/' : '/'
+const isGitHubPages = process.env.GITHUB_PAGES === 'true'
+const base = isGitHubPages ? '/sig-ftth/' : '/'
 
 export default defineConfig({
   base,
   plugins: [react()],
   resolve: {
     alias: {
-      '@':            path.resolve(__dirname, './src'),
-      '@components':  path.resolve(__dirname, './src/components'),
-      '@pages':       path.resolve(__dirname, './src/pages'),
-      '@hooks':       path.resolve(__dirname, './src/hooks'),
-      '@store':       path.resolve(__dirname, './src/store'),
-      '@services':    path.resolve(__dirname, './src/services'),
-    }
-  },
-  server: {
-    port: 3000,
-    host: true,
-    proxy: {
-      '/api':  { target: 'http://localhost:8000', changeOrigin: true },
-      '/auth': { target: 'http://localhost:8000', changeOrigin: true },
-      '/ws':   { target: 'ws://localhost:8000',   ws: true },
+      '@':           path.resolve(__dirname, './src'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@pages':      path.resolve(__dirname, './src/pages'),
+      '@hooks':      path.resolve(__dirname, './src/hooks'),
+      '@store':      path.resolve(__dirname, './src/store'),
+      '@services':   path.resolve(__dirname, './src/services'),
     }
   },
   build: {
     outDir: 'dist',
     sourcemap: false,
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-map':   ['leaflet', 'react-leaflet'],
-          'vendor-charts':['chart.js', 'react-chartjs-2'],
-          'vendor-ui':    ['zustand', 'react-hot-toast'],
-        }
-      }
-    }
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: { output: { manualChunks: undefined } }
   }
 })
