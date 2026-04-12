@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
           accessToken: null,
           refreshToken: null
         })
-        window.location.href = '/login'
+        window.location.href = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/login'
       },
 
       isAuthenticated: () => !!get().accessToken,

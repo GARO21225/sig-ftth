@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import api from '@services/api'
-import api from '@services/api'
 import toast from 'react-hot-toast'
 
 interface User { id: string; email: string; nom: string; prenom: string; role: string; actif: boolean; date_creation: string; date_derniere_connexion?: string }

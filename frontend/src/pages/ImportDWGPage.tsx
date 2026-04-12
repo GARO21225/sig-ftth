@@ -23,7 +23,19 @@ interface HistoriqueImport {
   systeme_projection: string; importe_par: string
 }
 
+
+
+const STATUT_COLOR: Record<string, string> = {
+  integre: 'text-green-400',
+  valide: 'text-blue-400',
+  rejete: 'text-red-400',
+  en_cours: 'text-yellow-400',
+  echec: 'text-red-400',
+  warning: 'text-orange-400',
+}
+
 export default function ImportDWGPage() {
+
   const [step, setStep] = useState<1|2|3|4>(1)
   const [fichier, setFichier] = useState<File | null>(null)
   const [geojsonContent, setGeojsonContent] = useState('')
@@ -108,12 +120,6 @@ export default function ImportDWGPage() {
   const reset = () => {
     setStep(1); setFichier(null); setGeojsonContent(''); setResultat(null)
     if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const STATUT_COLOR: Record<string, string> = {
-    integre: 'text-green-400', valide: 'text-blue-400',
-    rejete: 'text-red-400', en_cours: 'text-yellow-400',
-    echec: 'text-red-400', warning: 'text-orange-400'
   }
 
   return (
@@ -361,9 +367,4 @@ export default function ImportDWGPage() {
     </div>
   )
 
-  const STATUT_COLOR: Record<string, string> = {
-    integre: 'text-green-400', valide: 'text-blue-400',
-    rejete: 'text-red-400', en_cours: 'text-yellow-400',
-    warning: 'text-orange-400', echec: 'text-red-400'
-  }
 }

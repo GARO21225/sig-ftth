@@ -2,25 +2,31 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>SIG FTTH — Redirection</title>
+  <title>SIG FTTH</title>
   <script>
-    // Technique SPA pour GitHub Pages
-    // Sauvegarde l'URL complète dans sessionStorage
-    // puis redirige vers index.html qui la restaure
-    var segmentCount = 1; // /sig-ftth/ = 1 segment
-    var l = window.location;
-    l.replace(
-      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-      l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
-      l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
-      (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-      l.hash
-    );
+    // SPA GitHub Pages fix — sauvegarde l'URL et redirige vers index.html
+    var base = '/sig-ftth';
+    var path = window.location.pathname;
+    var search = window.location.search;
+    var hash = window.location.hash;
+
+    // Construire l'URL relative à partir de /sig-ftth/
+    var relative = path.replace(base, '') || '/';
+    var full = relative + (search || '') + (hash || '');
+
+    // Sauvegarder dans sessionStorage
+    sessionStorage.setItem('spa-redirect', full);
+
+    // Rediriger vers la racine GitHub Pages
+    window.location.replace(base + '/');
   </script>
+  <style>
+    body { font-family: sans-serif; background: #030712; color: #9ca3af;
+           display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    p { text-align: center; }
+  </style>
 </head>
 <body>
-  <p style="font-family:sans-serif;color:#64748b;text-align:center;padding:3rem">
-    Redirection SIG FTTH...
-  </p>
+  <p>Chargement SIG FTTH...</p>
 </body>
 </html>

@@ -154,18 +154,20 @@ async def supprimer_equipement(eq_id: str, current_user: dict = Depends(require_
 async def generer_qr_noeud(eq_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     try:
         import qrcode
-        from app.core.config import settings
+        import qrcode.image.pure
         url = f"https://garo21225.github.io/sig-ftth/scan/{eq_id}"
-        qr = qrcode.QRCode(version=1, box_size=8, border=3)
+        qr = qrcode.QRCode(version=1, box_size=8, border=3,
+                           image_factory=qrcode.image.pure.PyPNGImage)
         qr.add_data(url)
         qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        qr.make_image().save(buf)
         b64 = base64.b64encode(buf.getvalue()).decode()
         return {"qr_base64": f"data:image/png;base64,{b64}", "url": url, "id": eq_id}
-    except ImportError:
-        raise HTTPException(501, "qrcode lib non installée — ajouter dans requirements.txt")
+    except Exception as e:
+        # Fallback: retourner juste l'URL si qrcode non dispo
+        url = f"https://garo21225.github.io/sig-ftth/scan/{eq_id}"
+        return {"qr_base64": None, "url": url, "id": eq_id, "warning": str(e)}
 
 # ── PHOTOS ÉQUIPEMENTS ───────────────────────────────────────────
 

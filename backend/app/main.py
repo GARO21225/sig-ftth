@@ -150,6 +150,8 @@ async def health():
         "app": settings.APP_NAME,
         "version": settings.VERSION,
         "database": "connected" if db_ok else "error",
+        "environment": "production",
+        "redis": "disabled",
     }
 
 @app.get("/", tags=["⚙️ Système"])

@@ -10,7 +10,7 @@ import { useAuthStore } from '@store/useStore'
 import { useWebSocket } from '@hooks/useWebSocket'
 
 // Basename dynamique : /sig-ftth sur GitHub Pages, / ailleurs
-const basename = import.meta.env.BASE_URL || '/'
+const basename = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/'
 
 // Lazy loading pages
 const LoginPage           = lazy(() => import('@pages/LoginPage'))

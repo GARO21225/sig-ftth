@@ -402,7 +402,7 @@ CREATE TABLE IF NOT EXISTS equipe_travaux (
     date_creation TIMESTAMP DEFAULT NOW()
 );
 
-CREATE SEQUENCE seq_ot START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_ot START 1;
 
 CREATE TABLE IF NOT EXISTS ordre_travail (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -698,11 +698,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_longueur_telecom
+DROP TRIGGER IF EXISTS trg_longueur_telecom ON
 BEFORE INSERT OR UPDATE ON lien_telecom
 FOR EACH ROW EXECUTE FUNCTION calc_longueur();
 
-CREATE TRIGGER trg_longueur_gc
+DROP TRIGGER IF EXISTS trg_longueur_gc ON
 BEFORE INSERT OR UPDATE ON lien_gc
 FOR EACH ROW EXECUTE FUNCTION calc_longueur();
 
@@ -726,27 +726,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_hist_noeud_telecom
+DROP TRIGGER IF EXISTS trg_hist_noeud_telecom ON
 AFTER INSERT OR UPDATE OR DELETE ON noeud_telecom
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-CREATE TRIGGER trg_hist_lien_telecom
+DROP TRIGGER IF EXISTS trg_hist_lien_telecom ON
 AFTER INSERT OR UPDATE OR DELETE ON lien_telecom
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-CREATE TRIGGER trg_hist_noeud_gc
+DROP TRIGGER IF EXISTS trg_hist_noeud_gc ON
 AFTER INSERT OR UPDATE OR DELETE ON noeud_gc
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-CREATE TRIGGER trg_hist_lien_gc
+DROP TRIGGER IF EXISTS trg_hist_lien_gc ON
 AFTER INSERT OR UPDATE OR DELETE ON lien_gc
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-CREATE TRIGGER trg_hist_logement
+DROP TRIGGER IF EXISTS trg_hist_logement ON
 AFTER INSERT OR UPDATE OR DELETE ON logement
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-CREATE TRIGGER trg_hist_ot
+DROP TRIGGER IF EXISTS trg_hist_ot ON
 AFTER INSERT OR UPDATE OR DELETE ON ordre_travail
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
@@ -769,7 +769,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_avancement_ot
+DROP TRIGGER IF EXISTS trg_avancement_ot ON
 AFTER INSERT OR UPDATE ON tache_travail
 FOR EACH ROW EXECUTE FUNCTION maj_avancement_ot();
 
@@ -801,7 +801,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_verrouillage
+DROP TRIGGER IF EXISTS trg_verrouillage ON
 AFTER INSERT ON journal_connexion
 FOR EACH ROW EXECUTE FUNCTION check_verrouillage();
 
@@ -816,7 +816,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_numero_ot
+DROP TRIGGER IF EXISTS trg_numero_ot ON
 BEFORE INSERT ON ordre_travail
 FOR EACH ROW EXECUTE FUNCTION generer_numero_ot();
 
@@ -824,7 +824,7 @@ FOR EACH ROW EXECUTE FUNCTION generer_numero_ot();
 -- VUE DASHBOARD
 -- ============================================
 
-CREATE VIEW kpi_dashboard AS
+CREATE OR REPLACE VIEW kpi_dashboard AS
 SELECT
     (SELECT COUNT(*) FROM logement) AS total_logements,
     (SELECT COALESCE(SUM(nb_el_reel),0)
