@@ -5,19 +5,21 @@
     <link rel="icon" type="image/png" href="/sig-ftth/icons/icon-192x192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#030712" />
-    <meta name="description" content="SIG Web FTTH — Gestion réseau fibre optique et génie civil" />
-    <link rel="manifest" href="/sig-ftth/manifest.json" />
     <title>SIG FTTH v6.1</title>
+    <style>
+      body { margin: 0; background: #030712; color: #9ca3af; font-family: sans-serif; }
+      #loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
+      #loading h2 { color: #3b82f6; font-size: 1.5rem; margin: 0; }
+      #loading p  { font-size: 0.875rem; margin: 0; }
+    </style>
     <script>
-      // SPA redirect restore — lit le chemin sauvegardé par 404.html
       (function() {
-        var redirect = sessionStorage.getItem('spa-redirect');
-        if (redirect) {
-          sessionStorage.removeItem('spa-redirect');
-          var url = redirect.replace(/~and~/g, '&');
-          window.history.replaceState(null, null, url);
-        }
+        var r = sessionStorage.getItem('spa-redirect');
+        if (r) { sessionStorage.removeItem('spa-redirect'); window.history.replaceState(null, null, r.replace(/~and~/g, '&')); }
       })();
+      window.onerror = function(msg, src, line, col, err) {
+        document.getElementById('loading').innerHTML = '<div style="padding:2rem;background:#1f0909;border:1px solid #7f1d1d;border-radius:12px;max-width:600px"><h3 style="color:#f87171;margin:0 0 8px">Erreur JS</h3><pre style="color:#fca5a5;white-space:pre-wrap;font-size:12px">' + msg + '\n' + src + ':' + line + '</pre></div>';
+      };
     </script>
     <script type="module" crossorigin src="/sig-ftth/assets/index-BuHk5joC.js"></script>
     <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-react-DI-t83gz.js">
@@ -26,6 +28,12 @@
     <link rel="stylesheet" crossorigin href="/sig-ftth/assets/index-CfyNdNKO.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="loading">
+        <h2>SIG FTTH v6.1</h2>
+        <p>Chargement en cours...</p>
+        <p style="font-size:11px;color:#4b5563;">Si ce message persiste, vérifiez la console (F12)</p>
+      </div>
+    </div>
   </body>
 </html>
