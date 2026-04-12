@@ -698,11 +698,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_longueur_telecom ON
+DROP TRIGGER IF EXISTS trg_longueur_telecom ON lien_telecom;
+CREATE TRIGGER trg_longueur_telecom
 BEFORE INSERT OR UPDATE ON lien_telecom
 FOR EACH ROW EXECUTE FUNCTION calc_longueur();
 
-DROP TRIGGER IF EXISTS trg_longueur_gc ON
+DROP TRIGGER IF EXISTS trg_longueur_gc ON lien_gc;
+CREATE TRIGGER trg_longueur_gc
 BEFORE INSERT OR UPDATE ON lien_gc
 FOR EACH ROW EXECUTE FUNCTION calc_longueur();
 
@@ -726,27 +728,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_hist_noeud_telecom ON
+DROP TRIGGER IF EXISTS trg_hist_noeud_telecom ON noeud_telecom;
+CREATE TRIGGER trg_hist_noeud_telecom
 AFTER INSERT OR UPDATE OR DELETE ON noeud_telecom
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-DROP TRIGGER IF EXISTS trg_hist_lien_telecom ON
+DROP TRIGGER IF EXISTS trg_hist_lien_telecom ON lien_telecom;
+CREATE TRIGGER trg_hist_lien_telecom
 AFTER INSERT OR UPDATE OR DELETE ON lien_telecom
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-DROP TRIGGER IF EXISTS trg_hist_noeud_gc ON
+DROP TRIGGER IF EXISTS trg_hist_noeud_gc ON noeud_gc;
+CREATE TRIGGER trg_hist_noeud_gc
 AFTER INSERT OR UPDATE OR DELETE ON noeud_gc
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-DROP TRIGGER IF EXISTS trg_hist_lien_gc ON
+DROP TRIGGER IF EXISTS trg_hist_lien_gc ON lien_gc;
+CREATE TRIGGER trg_hist_lien_gc
 AFTER INSERT OR UPDATE OR DELETE ON lien_gc
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-DROP TRIGGER IF EXISTS trg_hist_logement ON
+DROP TRIGGER IF EXISTS trg_hist_logement ON logement;
+CREATE TRIGGER trg_hist_logement
 AFTER INSERT OR UPDATE OR DELETE ON logement
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
-DROP TRIGGER IF EXISTS trg_hist_ot ON
+DROP TRIGGER IF EXISTS trg_hist_ot ON ordre_travail;
+CREATE TRIGGER trg_hist_ot
 AFTER INSERT OR UPDATE OR DELETE ON ordre_travail
 FOR EACH ROW EXECUTE FUNCTION log_modification();
 
@@ -769,7 +777,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_avancement_ot ON
+DROP TRIGGER IF EXISTS trg_avancement_ot ON tache_travail;
+CREATE TRIGGER trg_avancement_ot
 AFTER INSERT OR UPDATE ON tache_travail
 FOR EACH ROW EXECUTE FUNCTION maj_avancement_ot();
 
@@ -801,7 +810,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_verrouillage ON
+DROP TRIGGER IF EXISTS trg_verrouillage ON journal_connexion;
+CREATE TRIGGER trg_verrouillage
 AFTER INSERT ON journal_connexion
 FOR EACH ROW EXECUTE FUNCTION check_verrouillage();
 
@@ -816,7 +826,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trg_numero_ot ON
+DROP TRIGGER IF EXISTS trg_numero_ot ON ordre_travail;
+CREATE TRIGGER trg_numero_ot
 BEFORE INSERT ON ordre_travail
 FOR EACH ROW EXECUTE FUNCTION generer_numero_ot();
 

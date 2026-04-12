@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
+import axios from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 
 const RAILWAY_URL = 'https://sig-ftth-production-a3aa.up.railway.app'
 const API_URL = import.meta.env.VITE_API_URL || RAILWAY_URL
