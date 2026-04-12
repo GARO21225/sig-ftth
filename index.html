@@ -2,30 +2,30 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/sig-ftth/icons/icon-192x192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SIG FTTH</title>
-    <!-- Restauration URL SPA après redirect 404 GitHub Pages -->
+    <meta name="theme-color" content="#030712" />
+    <meta name="description" content="SIG Web FTTH — Gestion réseau fibre optique et génie civil" />
+    <link rel="manifest" href="/sig-ftth/manifest.json" />
+    <title>SIG FTTH v6.1</title>
     <script>
-      (function () {
-        var q = window.location.search;
-        if (q) {
-          var p = q.match(/[?&]p=([^&]+)/);
-          if (p) {
-            var path = decodeURIComponent(p[1]).replace(/~and~/g, '&');
-            var qm = q.match(/&q=([^&]+)/);
-            var qs = qm ? '?' + decodeURIComponent(qm[1]).replace(/~and~/g, '&') : '';
-            window.history.replaceState(null, null, '/sig-ftth/' + path + qs + window.location.hash);
-          }
+      // SPA redirect restore — lit le chemin sauvegardé par 404.html
+      (function() {
+        var redirect = sessionStorage.getItem('spa-redirect');
+        if (redirect) {
+          sessionStorage.removeItem('spa-redirect');
+          var url = redirect.replace(/~and~/g, '&');
+          window.history.replaceState(null, null, url);
         }
-        var r = sessionStorage.redirect;
-        if (r) { delete sessionStorage.redirect; window.history.replaceState(null, null, r); }
       })();
     </script>
-    <meta http-equiv="refresh" content="0; url=./frontend/dist/index.html" />
+    <script type="module" crossorigin src="/sig-ftth/assets/index-BuHk5joC.js"></script>
+    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-react-DI-t83gz.js">
+    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-charts-Bv-qlnbU.js">
+    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-ui-Bv7g2MqR.js">
+    <link rel="stylesheet" crossorigin href="/sig-ftth/assets/index-CfyNdNKO.css">
   </head>
   <body>
-    <p style="font-family:sans-serif;text-align:center;padding:3rem;color:#64748b">
-      Chargement SIG FTTH…
-    </p>
+    <div id="root"></div>
   </body>
 </html>
