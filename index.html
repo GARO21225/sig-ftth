@@ -1,39 +1,56 @@
 <!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/sig-ftth/icons/icon-192x192.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#030712" />
-    <title>SIG FTTH v6.1</title>
-    <style>
-      body { margin: 0; background: #030712; color: #9ca3af; font-family: sans-serif; }
-      #loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
-      #loading h2 { color: #3b82f6; font-size: 1.5rem; margin: 0; }
-      #loading p  { font-size: 0.875rem; margin: 0; }
-    </style>
-    <script>
-      (function() {
-        var r = sessionStorage.getItem('spa-redirect');
-        if (r) { sessionStorage.removeItem('spa-redirect'); window.history.replaceState(null, null, r.replace(/~and~/g, '&')); }
-      })();
-      window.onerror = function(msg, src, line, col, err) {
-        document.getElementById('loading').innerHTML = '<div style="padding:2rem;background:#1f0909;border:1px solid #7f1d1d;border-radius:12px;max-width:600px"><h3 style="color:#f87171;margin:0 0 8px">Erreur JS</h3><pre style="color:#fca5a5;white-space:pre-wrap;font-size:12px">' + msg + '\n' + src + ':' + line + '</pre></div>';
-      };
-    </script>
-    <script type="module" crossorigin src="/sig-ftth/assets/index-BuHk5joC.js"></script>
-    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-react-DI-t83gz.js">
-    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-charts-Bv-qlnbU.js">
-    <link rel="modulepreload" crossorigin href="/sig-ftth/assets/vendor-ui-Bv7g2MqR.js">
-    <link rel="stylesheet" crossorigin href="/sig-ftth/assets/index-CfyNdNKO.css">
-  </head>
-  <body>
-    <div id="root">
-      <div id="loading">
-        <h2>SIG FTTH v6.1</h2>
-        <p>Chargement en cours...</p>
-        <p style="font-size:11px;color:#4b5563;">Si ce message persiste, vérifiez la console (F12)</p>
-      </div>
-    </div>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <title>SIG FTTH — Diagnostic</title>
+  <style>
+    body { background: #030712; color: #22c55e; font-family: monospace; padding: 2rem; margin: 0; }
+    h1 { color: #3b82f6; }
+    .ok { color: #22c55e; }
+    .err { color: #ef4444; }
+    pre { background: #111827; padding: 1rem; border-radius: 8px; font-size: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>SIG FTTH v6.1 — Page de diagnostic</h1>
+  <p class="ok">✅ HTML fonctionne</p>
+  <p class="ok">✅ CSS fonctionne</p>
+  <div id="js-status"><p style="color:#f59e0b">⏳ JavaScript en cours...</p></div>
+  <div id="asset-status"><p style="color:#f59e0b">⏳ Vérification assets...</p></div>
+  <pre id="log"></pre>
+
+  <script>
+    var log = document.getElementById('log');
+    function addLog(msg, ok) {
+      log.innerHTML += (ok ? '✅ ' : '❌ ') + msg + '\n';
+    }
+
+    document.getElementById('js-status').innerHTML = '<p class="ok">✅ JavaScript fonctionne</p>';
+
+    // Test loading main JS
+    var script = document.createElement('script');
+    script.type = 'module';
+    script.src = '/sig-ftth/assets/index-BuHk5joC.js';
+    script.onload = function() { addLog('index-BuHk5joC.js chargé', true); };
+    script.onerror = function(e) { 
+      addLog('index-BuHk5joC.js ERREUR — fichier introuvable ou CORS', false);
+      document.getElementById('asset-status').innerHTML = '<p class="err">❌ Assets manquants — uploadez le contenu de assets/ dans gh-pages</p>';
+    };
+
+    // Check CSS
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/sig-ftth/assets/index-CfyNdNKO.css';
+    link.onload = function() { addLog('CSS chargé', true); };
+    link.onerror = function() { addLog('CSS ERREUR', false); };
+
+    document.head.appendChild(link);
+    document.head.appendChild(script);
+
+    addLog('URL: ' + window.location.href, true);
+    addLog('BASE_URL attendu: /sig-ftth/', true);
+
+    document.getElementById('asset-status').innerHTML = '<p style="color:#f59e0b">⏳ Test assets en cours...</p>';
+  </script>
+</body>
 </html>
