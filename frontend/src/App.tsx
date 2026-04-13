@@ -27,6 +27,9 @@ const AdminPage           = lazy(() => import('@pages/AdminPage'))
 const ImportDWGPage       = lazy(() => import('@pages/ImportDWGPage'))
 const ScanPage            = lazy(() => import('@pages/ScanPage'))
 const AnalyticsPage       = lazy(() => import('@pages/AnalyticsPage'))
+const ELPage              = lazy(() => import('@pages/ELPage'))
+const SynoptiquePage      = lazy(() => import('@pages/SynoptiquePage'))
+const ExportPage          = lazy(() => import('@pages/ExportPage'))
 
 function Loader() {
   return (
@@ -84,6 +87,9 @@ function AppContent() {
             <PrivateRoute roles={['admin']}><AdminPage /></PrivateRoute>
           }
         />
+        <Route path="el" element={<PrivateRoute><ELPage /></PrivateRoute>} />
+        <Route path="export" element={<PrivateRoute><ExportPage /></PrivateRoute>} />
+        <Route path="synoptique" element={<PrivateRoute><SynoptiquePage /></PrivateRoute>} />
         <Route path="analytics" element={<PrivateRoute roles={['admin','chef_projet','analyste']}><AnalyticsPage /></PrivateRoute>} />
         <Route path="import-dwg"
           element={

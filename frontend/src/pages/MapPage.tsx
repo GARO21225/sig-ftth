@@ -79,8 +79,8 @@ export default function MapPage() {
     const requests = [
       { key: 'noeuds-telecom', fn: () => api.get('/noeuds-telecom') },
       { key: 'noeuds-gc',      fn: () => api.get('/noeuds-gc') },
-      { key: 'liens-telecom',  fn: () => api.get('/liens-telecom') },
-      { key: 'liens-gc',       fn: () => api.get('/liens-gc') },
+      { key: 'liens-telecom',  fn: () => api.get('/liens-telecom/geojson') },
+      { key: 'liens-gc',       fn: () => api.get('/liens-gc/geojson') },
       { key: 'logements',      fn: () => api.get('/logements') },
       { key: 'zones',          fn: () => api.get('/zones-influence') },
     ]
@@ -92,8 +92,22 @@ export default function MapPage() {
         const data = result.value.data
         if (key === 'noeuds-telecom') setNoeuds(data)
         if (key === 'noeuds-gc')      setNoeudsGC(data)
-        if (key === 'liens-telecom')  setLiens(data)
-        if (key === 'liens-gc')       setLiensGC(data)
+        if (key === 'liens-telecom') {
+          const features = data?.features || (Array.isArray(data) ? data : [])
+          setLiens(features.map((f: any) => ({
+            ...f.properties,
+            id: f.properties?.id,
+            geom: f.geometry
+          })))
+        }
+        if (key === 'liens-gc') {
+          const features = data?.features || (Array.isArray(data) ? data : [])
+          setLiensGC(features.map((f: any) => ({
+            ...f.properties,
+            id: f.properties?.id,
+            geom: f.geometry
+          })))
+        }
         if (key === 'logements')      setLogements(data)
         if (key === 'zones')          setZonesData(data)
       } else { newErrors.push(key) }

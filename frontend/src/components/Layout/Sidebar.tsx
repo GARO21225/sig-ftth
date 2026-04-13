@@ -49,6 +49,27 @@ const MENU = [
     desc: 'Équipements'
   },
   {
+    path: '/export',
+    icon: '📤',
+    label: 'Exportation',
+    roles: [],
+    desc: 'Export GeoJSON/PDF'
+  },
+  {
+    path: '/el',
+    icon: '🏠',
+    label: 'Table EL',
+    roles: [],
+    desc: 'Équivalents logements'
+  },
+  {
+    path: '/synoptique',
+    icon: '📐',
+    label: 'Synoptique',
+    roles: [],
+    desc: 'Vue réseau'
+  },
+  {
     path: '/analytics',
     icon: '📈',
     label: 'Analytics',
