@@ -1,0 +1,20 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/App-BbYuajFV.js","assets/vendor-react-BeK1MbjZ.js","assets/vendor-charts-dkL-Ffi_.js"])))=>i.map(i=>d[i]);
+import{r as w,a as b,R as L}from"./vendor-react-BeK1MbjZ.js";(function(){const r=document.createElement("link").relList;if(r&&r.supports&&r.supports("modulepreload"))return;for(const t of document.querySelectorAll('link[rel="modulepreload"]'))i(t);new MutationObserver(t=>{for(const o of t)if(o.type==="childList")for(const n of o.addedNodes)n.tagName==="LINK"&&n.rel==="modulepreload"&&i(n)}).observe(document,{childList:!0,subtree:!0});function c(t){const o={};return t.integrity&&(o.integrity=t.integrity),t.referrerPolicy&&(o.referrerPolicy=t.referrerPolicy),t.crossOrigin==="use-credentials"?o.credentials="include":t.crossOrigin==="anonymous"?o.credentials="omit":o.credentials="same-origin",o}function i(t){if(t.ep)return;t.ep=!0;const o=c(t);fetch(t.href,o)}})();const R="modulepreload",O=function(e){return"/"+e},p={},P=function(r,c,i){let t=Promise.resolve();if(c&&c.length>0){document.getElementsByTagName("link");const n=document.querySelector("meta[property=csp-nonce]"),s=(n==null?void 0:n.nonce)||(n==null?void 0:n.getAttribute("nonce"));t=Promise.allSettled(c.map(a=>{if(a=O(a),a in p)return;p[a]=!0;const d=a.endsWith(".css"),g=d?'[rel="stylesheet"]':"";if(document.querySelector(`link[href="${a}"]${g}`))return;const l=document.createElement("link");if(l.rel=d?"stylesheet":R,d||(l.as="script"),l.crossOrigin="",l.href=a,s&&l.setAttribute("nonce",s),document.head.appendChild(l),d)return new Promise((E,_)=>{l.addEventListener("load",E),l.addEventListener("error",()=>_(new Error(`Unable to preload CSS for ${a}`)))})}))}function o(n){const s=new Event("vite:preloadError",{cancelable:!0});if(s.payload=n,window.dispatchEvent(s),!s.defaultPrevented)throw n}return t.then(n=>{for(const s of n||[])s.status==="rejected"&&o(s.reason);return r().catch(o)})};var y={exports:{}},u={};/**
+ * @license React
+ * react-jsx-runtime.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */var x=w,S=Symbol.for("react.element"),$=Symbol.for("react.fragment"),j=Object.prototype.hasOwnProperty,k=x.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner,A={key:!0,ref:!0,__self:!0,__source:!0};function v(e,r,c){var i,t={},o=null,n=null;c!==void 0&&(o=""+c),r.key!==void 0&&(o=""+r.key),r.ref!==void 0&&(n=r.ref);for(i in r)j.call(r,i)&&!A.hasOwnProperty(i)&&(t[i]=r[i]);if(e&&e.defaultProps)for(i in r=e.defaultProps,r)t[i]===void 0&&(t[i]=r[i]);return{$$typeof:S,type:e,key:o,ref:n,props:t,_owner:k.current}}u.Fragment=$;u.jsx=v;u.jsxs=v;y.exports=u;var m=y.exports,f={},h=b;f.createRoot=h.createRoot,f.hydrateRoot=h.hydrateRoot;window.addEventListener("unhandledrejection",e=>{document.body.innerHTML=`<div style="background:#030712;color:#ef4444;padding:2rem;font-family:monospace;min-height:100vh">
+    <h2>Promise rejetée</h2><pre style="color:#fca5a5;white-space:pre-wrap">${e.reason}</pre>
+  </div>`});window.addEventListener("error",e=>{document.body.innerHTML=`<div style="background:#030712;color:#ef4444;padding:2rem;font-family:monospace;min-height:100vh">
+    <h2>Erreur JS: ${e.message}</h2>
+    <pre style="color:#fca5a5;white-space:pre-wrap">Fichier: ${e.filename}
+Ligne: ${e.lineno}</pre>
+  </div>`});P(async()=>{const{default:e}=await import("./App-BbYuajFV.js").then(r=>r.A);return{default:e}},__vite__mapDeps([0,1,2])).then(({default:e})=>{f.createRoot(document.getElementById("root")).render(m.jsx(L.StrictMode,{children:m.jsx(e,{})}))}).catch(e=>{document.body.innerHTML=`<div style="background:#030712;color:#ef4444;padding:2rem;font-family:monospace;min-height:100vh">
+    <h2>Echec chargement App</h2>
+    <pre style="color:#fca5a5;white-space:pre-wrap">${(e==null?void 0:e.message)||e}</pre>
+    <pre style="color:#6b7280;font-size:11px">${(e==null?void 0:e.stack)||""}</pre>
+  </div>`});export{P as _,m as j};
