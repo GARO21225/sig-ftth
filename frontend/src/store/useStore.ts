@@ -209,3 +209,34 @@ export const useUIStore = create<UIState>()(
       set({ isLoading: v })
   })
 )
+
+// ─── Auto-logout après 10 minutes d'inactivité ─────────────────────────────
+export function useAutoLogout() {
+  const { logout, isAuthenticated } = useAuthStore()
+  
+  if (typeof window === 'undefined') return
+
+  const TIMEOUT = 10 * 60 * 1000 // 10 minutes
+
+  let timer: ReturnType<typeof setTimeout>
+
+  const reset = () => {
+    clearTimeout(timer)
+    if (isAuthenticated()) {
+      timer = setTimeout(() => {
+        logout()
+        window.location.href = '/login'
+      }, TIMEOUT)
+    }
+  }
+
+  const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+  
+  events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+  reset()
+
+  return () => {
+    clearTimeout(timer)
+    events.forEach(e => window.removeEventListener(e, reset))
+  }
+}

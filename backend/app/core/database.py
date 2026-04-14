@@ -18,7 +18,7 @@ async def _run_sql_file(conn, filepath: Path):
     logger.info(f"SQL execute : {filepath.name}")
 
 
-async def _connect_with_retry(url: str, retries: int = 10, delay: float = 3.0):
+async def _connect_with_retry(url: str, retries: int = 5, delay: float = 2.0):
     """Tente la connexion jusqu'a retries fois, avec delai entre chaque."""
     for attempt in range(1, retries + 1):
         try:

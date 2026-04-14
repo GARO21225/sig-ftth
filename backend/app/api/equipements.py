@@ -201,4 +201,4 @@ async def photos_noeud(noeud_id: str, current_user: dict = Depends(get_current_u
     """, noeud_id)
     return [dict(r) for r in rows]
 
-router.include_router(equip_router)
+# Inclusion gérée par main.py

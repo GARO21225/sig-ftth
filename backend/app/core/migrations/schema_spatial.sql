@@ -4,6 +4,26 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- MODULE 2 : RÉSEAU TÉLÉCOM
 -- ============================================
 
+-- Migration: Élargir les types noeud_gc acceptés
+DO $$ BEGIN
+    ALTER TABLE noeud_gc DROP CONSTRAINT IF EXISTS noeud_gc_type_noeud_check;
+    ALTER TABLE noeud_gc ADD CONSTRAINT noeud_gc_type_noeud_check 
+        CHECK (type_noeud IN (
+            'chambre','chambre_l1t','chambre_l2t','chambre_l3t','chambre_l4t',
+            'regard','appui_poteau','appui_aerien',
+            'point_entree_immeuble','borne','micro_tranchee_entree'
+        ));
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- Migration: Élargir les types noeud_telecom
+DO $$ BEGIN
+    ALTER TABLE noeud_telecom DROP CONSTRAINT IF EXISTS noeud_telecom_type_noeud_check;
+    ALTER TABLE noeud_telecom ADD CONSTRAINT noeud_telecom_type_noeud_check 
+        CHECK (type_noeud IN ('NRO','SRO','PBO','PTO','PM','CLIENT','SBO','EOC'));
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS noeud_telecom (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
@@ -73,8 +93,9 @@ CREATE TABLE IF NOT EXISTS noeud_gc (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     nom_unique VARCHAR(100) UNIQUE NOT NULL,
     type_noeud VARCHAR(50) CHECK (type_noeud IN (
-        'chambre','regard','appui_poteau',
-        'point_entree_immeuble','borne'
+        'chambre','chambre_l1t','chambre_l2t','chambre_l3t','chambre_l4t',
+        'regard','appui_poteau','appui_aerien',
+        'point_entree_immeuble','borne','micro_tranchee_entree'
     )),
     geom GEOMETRY(POINT, 4326) NOT NULL,
     dimension VARCHAR(50),
@@ -445,6 +466,16 @@ CREATE TABLE IF NOT EXISTS ordre_travail (
     date_creation TIMESTAMP DEFAULT NOW(),
     date_modification TIMESTAMP
 );
+-- Migration PCR v2.5: colonnes OT enrichies
+ALTER TABLE ordre_travail 
+    ADD COLUMN IF NOT EXISTS prestataire VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS prestataire_contact VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS prestataire_zone VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS chef_equipe_nom VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS equipe_membres TEXT[],
+    ADD COLUMN IF NOT EXISTS nature_travaux VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS brouillon BOOLEAN DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS idx_ot_statut ON ordre_travail(statut);
 CREATE INDEX IF NOT EXISTS idx_ot_geom
     ON ordre_travail USING GIST(geom_point);

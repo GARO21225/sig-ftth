@@ -22,6 +22,14 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     chunkSizeWarningLimit: 2000,
-    rollupOptions: { output: { manualChunks: undefined } }
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':  ['react','react-dom','react-router-dom'],
+          'vendor-map':    ['leaflet','react-leaflet'],
+          'vendor-charts': ['recharts'],
+        }
+      }
+    }
   }
 })

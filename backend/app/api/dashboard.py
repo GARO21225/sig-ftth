@@ -252,3 +252,73 @@ async def bons_commande_pipeline(
         ORDER BY nb DESC
     """)
     return [dict(r) for r in rows]
+
+
+@router.get("/synthese")
+async def synthese_dashboard(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """KPI plat + alertes + répartition nœuds."""
+    # Flat KPI
+    try:
+        kpi = await db.fetchrow("SELECT * FROM kpi_dashboard")
+    except Exception:
+        kpi = None
+
+    flat = {
+        "nb_noeuds_telecom": kpi["nb_noeuds_telecom"] if kpi else 0,
+        "nb_noeuds_gc": kpi["nb_noeuds_gc"] if kpi else 0,
+        "nb_liens_telecom": kpi["nb_liens_telecom"] if kpi else 0,
+        "nb_liens_gc": kpi["nb_liens_gc"] if kpi else 0,
+        "total_logements": kpi["total_logements"] if kpi else 0,
+        "el_raccordables": kpi["el_raccordables"] if kpi else 0,
+        "el_raccordes": kpi["el_raccordes"] if kpi else 0,
+        "taux_penetration_pct": round((kpi["el_raccordes"] or 0) / max(kpi["el_raccordables"] or 1, 1) * 100, 1) if kpi else 0,
+        "ot_en_cours": kpi["ot_en_cours"] if kpi else 0,
+        "ot_planifie": 0,
+        "ot_termine": 0,
+        "longueur_reseau_km": 0,
+    }
+
+    # OT stats
+    try:
+        ot_stats = await db.fetch("SELECT statut, COUNT(*) AS n FROM ordre_travail GROUP BY statut")
+        for row in ot_stats:
+            if row["statut"] == "planifie": flat["ot_planifie"] = row["n"]
+            elif row["statut"] == "termine": flat["ot_termine"] = row["n"]
+            elif row["statut"] == "en_cours": flat["ot_en_cours"] = row["n"]
+    except Exception: pass
+
+    # Longueur réseau
+    try:
+        lng = await db.fetchval("SELECT SUM(longueur_m)/1000 FROM lien_telecom WHERE longueur_m IS NOT NULL")
+        flat["longueur_reseau_km"] = round(float(lng or 0), 1)
+    except Exception: pass
+
+    # Alertes saturation
+    alertes = []
+    try:
+        nodes = await db.fetch("""
+            SELECT nom_unique, type_noeud,
+                   ROUND(nb_fibres_utilisees::decimal/NULLIF(capacite_fibres_max,0)*100,1) AS pct
+            FROM noeud_telecom
+            WHERE capacite_fibres_max > 0
+              AND nb_fibres_utilisees::decimal/capacite_fibres_max >= 0.75
+            ORDER BY pct DESC LIMIT 10
+        """)
+        for n in nodes:
+            niveau = "critique" if n["pct"] >= 90 else "warning"
+            alertes.append({"niveau": niveau, "message": f"Saturation {n['pct']}%",
+                            "noeud": n["nom_unique"], "type": n["type_noeud"]})
+    except Exception: pass
+
+    # Répartition noeuds
+    repartition = []
+    try:
+        rep = await db.fetch("SELECT type_noeud, COUNT(*) AS n FROM noeud_telecom GROUP BY type_noeud ORDER BY n DESC")
+        repartition = [{"type": r["type_noeud"], "count": r["n"]} for r in rep]
+    except Exception: pass
+
+    return {**flat, "alertes": alertes, "repartition_noeuds": repartition}
+

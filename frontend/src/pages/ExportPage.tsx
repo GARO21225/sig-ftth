@@ -39,14 +39,12 @@ export default function ExportPage() {
     if (couches.length === 0) return toast.error('Sélectionnez au moins une couche')
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        format,
-        couches: couches.join(','),
-        ...(commune && { commune }),
-        ...(statut && { statut }),
-        ...(dateDebut && { date_debut: dateDebut }),
-        ...(dateFin && { date_fin: dateFin }),
-      })
+      // Build query params
+      const params = new URLSearchParams()
+      params.set('format', format)
+      params.set('couches', couches.join(','))
+      if (commune) params.set('commune', commune)
+      if (statut) params.set('statut', statut)
 
       if (format === 'pdf') {
         // Rapport PDF via analytics
@@ -93,7 +91,7 @@ export default function ExportPage() {
         return
       }
 
-      const r = await api.get(`/export?${params}`, { responseType: 'blob' })
+      const r = await api.get(`/export?${params.toString()}`, { responseType: 'blob' })
       const blob = new Blob([r.data])
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -222,8 +220,9 @@ export default function ExportPage() {
                 <p>✅ GeoJSON — disponible</p>
                 <p>✅ PDF rapport — disponible</p>
                 <p>✅ CSV — disponible</p>
-                <p>🔄 Shapefile — en développement</p>
-                <p>🔄 Excel, KML — en développement</p>
+                <p>✅ Shapefile — disponible (format ZIP+GeoJSON)</p>
+                <p>✅ Excel — disponible</p>
+                <p>✅ KML — disponible</p>
               </div>
             </div>
 

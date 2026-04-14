@@ -6,7 +6,7 @@ import {
 } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import { Toaster } from 'react-hot-toast'
-import { useAuthStore } from '@store/useStore'
+import { useAuthStore, useAutoLogout } from '@store/useStore'
 import { useWebSocket } from '@hooks/useWebSocket'
 
 // Basename dynamique : /sig-ftth sur GitHub Pages, / ailleurs
@@ -57,6 +57,7 @@ function PrivateRoute({
 
 function AppContent() {
   useWebSocket('global')
+  useAutoLogout()
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

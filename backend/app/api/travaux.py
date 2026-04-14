@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.redis import cache_delete
@@ -204,27 +204,29 @@ async def creer_ot(
 
     row = await db.fetchrow(f"""
         INSERT INTO ordre_travail
-            (titre, description, type_travaux,
-             priorite, date_debut_prevue,
-             date_fin_prevue, adresse_chantier,
-             geom_point, id_equipe,
-             id_noeud_telecom, id_noeud_gc,
-             id_logement, cout_estime,
-             devise, commentaire, cree_par)
+            (titre, description, type_travaux, nature_travaux,
+             priorite, date_debut_prevue, date_fin_prevue,
+             adresse_chantier, geom_point,
+             prestataire, prestataire_contact, prestataire_zone,
+             chef_equipe_nom, equipe_membres,
+             id_equipe, id_noeud_telecom, id_noeud_gc,
+             id_logement, cout_estime, devise, commentaire, cree_par)
         VALUES (
-            $1,$2,$3,$4,$5,$6,$7,
+            $1,$2,$3,$4,$5,$6,$7,$8,
             {geom_sql},
-            $8,$9,$10,$11,$12,$13,$14,$15
+            $9,$10,$11,$12,$13,
+            $14,$15,$16,$17,$18,$19,$20,$21
         )
         RETURNING id, numero_ot, titre, statut
     """,
     data.titre, data.description,
-    data.type_travaux, data.priorite,
-    data.date_debut_prevue, data.date_fin_prevue,
+    data.type_travaux, data.nature_travaux,
+    data.priorite, data.date_debut_prevue, data.date_fin_prevue,
     data.adresse_chantier,
-    data.id_equipe, data.id_noeud_telecom,
-    data.id_noeud_gc, data.id_logement,
-    data.cout_estime, data.devise,
+    data.prestataire, data.prestataire_contact, data.prestataire_zone,
+    data.chef_equipe, data.equipe_membres,
+    data.id_equipe, data.id_noeud_telecom, data.id_noeud_gc,
+    data.id_logement, data.cout_estime, data.devise,
     data.commentaire, current_user['sub'])
 
     return dict(row)

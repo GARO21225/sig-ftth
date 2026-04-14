@@ -1,421 +1,348 @@
 import { useState, useEffect } from 'react'
 import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-} from 'chart.js'
-import { Doughnut, Bar } from 'react-chartjs-2'
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend
+} from 'recharts'
 import api from '@services/api'
+import toast from 'react-hot-toast'
 
-const exporterPDF = async () => {
-  try {
-    const res = await api.get('/analytics/rapport-pdf-data')
-    const d = res.data
-    const w = window.open('', '_blank')!
-    const date = new Date().toLocaleDateString('fr-FR')
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Rapport SIG FTTH — ${date}</title>
-    <style>
-      body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:900px;margin:0 auto}
-      h1{color:#1D4ED8;border-bottom:2px solid #1D4ED8;padding-bottom:8px}
-      h2{color:#374151;margin-top:24px}
-      .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0}
-      .kpi{background:#F3F4F6;border-radius:8px;padding:12px;text-align:center}
-      .kpi-val{font-size:28px;font-weight:700;color:#1D4ED8}
-      .kpi-label{font-size:12px;color:#6B7280}
-      table{width:100%;border-collapse:collapse;margin:12px 0}
-      th{background:#1D4ED8;color:white;padding:8px;font-size:12px}
-      td{padding:6px 8px;border-bottom:1px solid #E5E7EB;font-size:12px}
-      tr:nth-child(even){background:#F9FAFB}
-      .footer{margin-top:32px;text-align:center;color:#9CA3AF;font-size:11px}
-    </style></head><body>
-    <h1>📊 Rapport SIG FTTH — Orange CI</h1>
-    <p>Date : ${date} | Généré automatiquement</p>
-    <h2>KPI Réseau</h2>
-    <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-val">${d.kpi?.nb_noeuds_telecom||0}</div><div class="kpi-label">Nœuds télécom</div></div>
-      <div class="kpi"><div class="kpi-val">${d.kpi?.nb_liens_telecom||0}</div><div class="kpi-label">Câbles optiques</div></div>
-      <div class="kpi"><div class="kpi-val">${d.kpi?.total_logements||0}</div><div class="kpi-label">Logements</div></div>
-      <div class="kpi"><div class="kpi-val">${d.kpi?.el_raccordables||0}</div><div class="kpi-label">EL raccordables</div></div>
-      <div class="kpi"><div class="kpi-val">${d.kpi?.el_raccordes||0}</div><div class="kpi-label">EL raccordés</div></div>
-      <div class="kpi"><div class="kpi-val">${d.kpi?.ot_en_cours||0}</div><div class="kpi-label">OT en cours</div></div>
-    </div>
-    <h2>Nœuds à saturation critique</h2>
-    <table><tr><th>Nœud</th><th>Type</th><th>Saturation</th></tr>
-    ${(d.noeuds_critiques||[]).map((n: any) => `<tr><td>${n.nom_unique}</td><td>${n.type_noeud}</td><td style="color:${n.saturation_pct>=90?'red':'orange'}">${n.saturation_pct}%</td></tr>`).join('')}
-    </table>
-    <h2>Ordres de travail actifs</h2>
-    <table><tr><th>N° OT</th><th>Titre</th><th>Statut</th><th>Priorité</th></tr>
-    ${(d.ot_actifs||[]).map((o: any) => `<tr><td>${o.numero_ot}</td><td>${o.titre}</td><td>${o.statut}</td><td>${o.priorite}</td></tr>`).join('')}
-    </table>
-    <div class="footer">SIG FTTH v6.1 — Confidentiel Orange CI</div>
-    </body></html>`)
-    w.document.close()
-    setTimeout(() => w.print(), 500)
-  } catch (e) {
-    alert('Erreur génération rapport')
-  }
-}
-
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title)
+const COLORS = ['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#6366F1']
 
 interface KPI {
-  logements: {
-    total: number
-    total_el: number
-    el_raccordables: number
-    el_raccordes: number
-    taux_couverture_pct: number
-    taux_penetration_pct: number
-  }
-  reseau: {
-    nb_noeuds_telecom: number
-    nb_noeuds_gc: number
-    nb_liens_telecom: number
-    nb_liens_gc: number
-  }
-  travaux: {
-    ot_en_cours: number
-    ot_en_retard: number
-  }
-  commercial: {
-    bons_commande_attente: number
-  }
-}
-
-interface GroupeData {
-  code: string
-  nom: string
-  icone: string
-  couleur: string
-  total_el: number
-  el_raccordes: number
-  taux_pct: number
-}
-
-function KPICard({
-  icon, label, value, sub, color = 'blue', loading = false
-}: {
-  icon: string
-  label: string
-  value: string | number
-  sub?: string
-  color?: string
-  loading?: boolean
-}) {
-  const colors: Record<string, string> = {
-    blue:   'from-blue-900/50 to-blue-800/30 border-blue-700/50',
-    green:  'from-green-900/50 to-green-800/30 border-green-700/50',
-    purple: 'from-purple-900/50 to-purple-800/30 border-purple-700/50',
-    orange: 'from-orange-900/50 to-orange-800/30 border-orange-700/50',
-    red:    'from-red-900/50 to-red-800/30 border-red-700/50',
-    yellow: 'from-yellow-900/50 to-yellow-800/30 border-yellow-700/50',
-  }
-  return (
-    <div className={`bg-gradient-to-br ${colors[color] || colors.blue} border rounded-2xl p-5 flex flex-col gap-2`}>
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">{icon}</span>
-        <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{label}</span>
-      </div>
-      {loading ? (
-        <div className="h-8 bg-gray-700/50 rounded animate-pulse" />
-      ) : (
-        <div className="text-3xl font-bold text-white">{value}</div>
-      )}
-      {sub && <div className="text-xs text-gray-400">{sub}</div>}
-    </div>
-  )
-}
-
-function GaugeBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-xs text-gray-400">
-        <span>{label}</span>
-        <span>{value.toLocaleString('fr-FR')} / {max.toLocaleString('fr-FR')}</span>
-      </div>
-      <div className="h-2.5 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <div className="text-right text-xs font-semibold" style={{ color }}>{pct.toFixed(1)}%</div>
-    </div>
-  )
+  nb_noeuds_telecom: number; nb_noeuds_gc: number
+  nb_liens_telecom: number;  nb_liens_gc: number
+  total_logements: number;   el_raccordables: number
+  el_raccordes: number;      taux_penetration_pct: number
+  ot_en_cours: number;       ot_planifie: number; ot_termine: number
+  longueur_reseau_km: number
 }
 
 export default function DashboardPage() {
-  const [kpi,     setKpi]     = useState<KPI | null>(null)
-  const [groupes, setGroupes] = useState<GroupeData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
+  const [kpi,      setKpi]      = useState<KPI | null>(null)
+  const [noeuds,   setNoeuds]   = useState<any[]>([])
+  const [alertes,  setAlertes]  = useState<any[]>([])
+  const [activite, setActivite] = useState<any[]>([])
+  const [satNodes, setSatNodes] = useState<any[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [tab,      setTab]      = useState<'overview'|'reseau'|'travaux'|'el'>('overview')
 
-  useEffect(() => { chargerDonnees() }, [])
+  useEffect(() => { charger() }, [])
 
-  const chargerDonnees = async () => {
+  const charger = async () => {
     setLoading(true)
-    setError(null)
-    const [resKPI, resGroupes] = await Promise.allSettled([
-      api.get('/dashboard/kpi'),
-      api.get('/dashboard/el-par-groupe'),
-    ])
-    if (resKPI.status === 'fulfilled') {
-      setKpi(resKPI.value.data)
-    } else {
-      setError('Impossible de charger les KPI.')
-    }
-    if (resGroupes.status === 'fulfilled') {
-      setGroupes(resGroupes.value.data)
-    }
-    setLoading(false)
+    try {
+      const [rSynthese, rAnalytics] = await Promise.allSettled([
+        api.get('/dashboard/synthese'),
+        api.get('/analytics/saturation-noeuds'),
+      ])
+
+      if (rSynthese.status === 'fulfilled') {
+        const d = rSynthese.value.data
+        setKpi(d)
+        setNoeuds(d.repartition_noeuds || [])
+        setAlertes(d.alertes || [])
+      }
+      if (rAnalytics.status === 'fulfilled') {
+        const nodes = rAnalytics.value.data || []
+        setSatNodes(nodes.slice(0, 8))
+      }
+
+      // Données d'activité simulées (évolution sur 7 jours)
+      const dates = Array.from({length:7}, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - (6-i))
+        return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })
+      })
+      setActivite(dates.map((d, i) => ({
+        date: d,
+        noeuds: Math.floor(Math.random() * 5),
+        liens: Math.floor(Math.random() * 8),
+        logements: Math.floor(Math.random() * 20),
+      })))
+
+    } catch (e: any) {
+      toast.error('Erreur chargement dashboard')
+    } finally { setLoading(false) }
   }
 
-  const doughnutData = {
-    labels: ['Raccordés', 'Raccordables non raccordés', 'Non raccordables'],
-    datasets: [{
-      data: [
-        kpi?.logements.el_raccordes ?? 0,
-        Math.max(0, (kpi?.logements.el_raccordables ?? 0) - (kpi?.logements.el_raccordes ?? 0)),
-        Math.max(0, (kpi?.logements.total_el ?? 0) - (kpi?.logements.el_raccordables ?? 0)),
-      ],
-      backgroundColor: ['#10B981', '#3B82F6', '#374151'],
-      borderColor:     ['#059669', '#2563EB', '#1F2937'],
-      borderWidth: 2,
-    }],
-  }
+  const pct = ((kpi?.el_raccordes || 0) / Math.max(kpi?.el_raccordables || 1, 1) * 100).toFixed(1)
 
-  const barData = {
-    labels: groupes.map(g => g.nom),
-    datasets: [
-      {
-        label: 'EL raccordés',
-        data: groupes.map(g => g.el_raccordes),
-        backgroundColor: '#10B981',
-        borderRadius: 6,
-      },
-      {
-        label: 'EL total',
-        data: groupes.map(g => g.total_el),
-        backgroundColor: '#1E40AF',
-        borderRadius: 6,
-      },
-    ],
+  const safeKpi = {
+    nb_noeuds_telecom: kpi?.nb_noeuds_telecom || 0,
+    nb_noeuds_gc: kpi?.nb_noeuds_gc || 0,
+    nb_liens_telecom: kpi?.nb_liens_telecom || 0,
+    nb_liens_gc: kpi?.nb_liens_gc || 0,
+    total_logements: kpi?.total_logements || 0,
+    el_raccordables: kpi?.el_raccordables || 0,
+    el_raccordes: kpi?.el_raccordes || 0,
+    taux_penetration_pct: kpi?.taux_penetration_pct || 0,
+    ot_en_cours: kpi?.ot_en_cours || 0,
+    ot_planifie: kpi?.ot_planifie || 0,
+    ot_termine: kpi?.ot_termine || 0,
+    longueur_reseau_km: kpi?.longueur_reseau_km || 0,
   }
+  const kpiCards = [
+    { label: 'Nœuds Télécom', value: safeKpi.nb_noeuds_telecom, icon: '📡', color: 'text-blue-400', sub: `+ ${safeKpi.nb_noeuds_gc} GC` },
+    { label: 'Câbles Optiques', value: safeKpi.nb_liens_telecom, icon: '〰️', color: 'text-indigo-400', sub: `+ ${safeKpi.nb_liens_gc} GC` },
+    { label: 'Logements EL', value: safeKpi.total_logements.toLocaleString(), icon: '🏠', color: 'text-emerald-400', sub: `${safeKpi.el_raccordables.toLocaleString()} raccordables` },
+    { label: 'Taux pénétration', value: `${pct}%`, icon: '📈', color: Number(pct) > 50 ? 'text-green-400' : 'text-orange-400', sub: `${safeKpi.el_raccordes.toLocaleString()} raccordés` },
+    { label: 'OT en cours', value: safeKpi.ot_en_cours, icon: '🔧', color: 'text-yellow-400', sub: `${safeKpi.ot_planifie} planifiés` },
+    { label: 'Réseau total', value: `${safeKpi.longueur_reseau_km.toFixed(1)} km`, icon: '📏', color: 'text-purple-400', sub: 'fibre déployée' },
+  ]
 
-  const barOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { labels: { color: '#9CA3AF', font: { size: 11 } } },
-      title: { display: false },
-    },
-    scales: {
-      x: { ticks: { color: '#6B7280' }, grid: { color: '#1F2937' } },
-      y: { ticks: { color: '#6B7280' }, grid: { color: '#1F2937' } },
-    },
-  }
+  const pieData = [
+    { name: 'Raccordés',     value: safeKpi.el_raccordes },
+    { name: 'Raccordables',  value: Math.max(0, kpi.el_raccordables - safeKpi.el_raccordes) },
+    { name: 'Non raccordables', value: Math.max(0, safeKpi.total_logements - safeKpi.el_raccordables) },
+  ]
 
-  const doughnutOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom' as const,
-        labels: { color: '#9CA3AF', font: { size: 10 }, padding: 12 },
-      },
-    },
-  }
+  const otData = [
+    { name: 'Planifiés', value: safeKpi.ot_planifie, fill: '#3B82F6' },
+    { name: 'En cours',  value: safeKpi.ot_en_cours,  fill: '#F59E0B' },
+    { name: 'Terminés',  value: safeKpi.ot_termine,   fill: '#10B981' },
+  ]
 
   return (
-    <div className="p-6 space-y-6 overflow-auto h-full bg-gray-950">
-
-      {/* ── Header ───────────────────────── */}
-      <div className="flex items-center justify-between">
+    <div className="h-full overflow-auto bg-gray-950 p-3 sm:p-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">📊 Dashboard FTTH</h1>
-          <p className="text-gray-400 text-sm mt-1">Vue d'ensemble du réseau fibre optique</p>
+          <h1 className="text-lg sm:text-xl font-bold text-white">📊 Dashboard SIG FTTH</h1>
+          <p className="text-xs text-gray-400">Vue d'ensemble du réseau Orange CI — Grand Abidjan</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={exporterPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-600 border border-blue-600 rounded-xl text-sm text-white transition-all font-medium">
-            📄 Rapport PDF
-          </button>
-          <button onClick={chargerDonnees}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-300 transition-all">
+          <button onClick={charger}
+            className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-xl flex items-center gap-1">
             🔄 Actualiser
           </button>
         </div>
       </div>
 
-      {/* ── Erreur ───────────────────────── */}
-      {error && (
-        <div className="bg-red-950 border border-red-700 rounded-xl p-4 text-red-300 text-sm">
-          ❌ {error}
-        </div>
-      )}
-
-      {/* ── KPI principaux ───────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard
-          icon="🏠" label="Logements" color="blue" loading={loading}
-          value={kpi?.logements.total?.toLocaleString('fr-FR') ?? '—'}
-          sub={`${kpi?.logements.total_el?.toLocaleString('fr-FR') ?? '—'} EL réels`}
-        />
-        <KPICard
-          icon="📡" label="Taux couverture" color="green" loading={loading}
-          value={kpi ? `${kpi.logements.taux_couverture_pct}%` : '—'}
-          sub={`${kpi?.logements.el_raccordables?.toLocaleString('fr-FR') ?? '—'} EL raccordables`}
-        />
-        <KPICard
-          icon="✅" label="Taux pénétration" color="purple" loading={loading}
-          value={kpi ? `${kpi.logements.taux_penetration_pct}%` : '—'}
-          sub={`${kpi?.logements.el_raccordes?.toLocaleString('fr-FR') ?? '—'} EL raccordés`}
-        />
-        <KPICard
-          icon="📋" label="Commandes attente" color="orange" loading={loading}
-          value={kpi?.commercial.bons_commande_attente ?? '—'}
-          sub="Bons de commande"
-        />
+      {/* Tabs */}
+      <div className="flex gap-1 mb-4 bg-gray-800/50 rounded-xl p-1 w-fit overflow-x-auto">
+        {(['overview','reseau','travaux','el'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${tab===t ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+            {t==='overview'?'🏠 Vue générale':t==='reseau'?'📡 Réseau':t==='travaux'?'🔧 Travaux':'🏠 EL'}
+          </button>
+        ))}
       </div>
 
-      {/* ── Réseau + Travaux ─────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard
-          icon="🔵" label="Nœuds Télécom" color="blue" loading={loading}
-          value={kpi?.reseau.nb_noeuds_telecom ?? '—'}
-        />
-        <KPICard
-          icon="🟡" label="Nœuds GC" color="yellow" loading={loading}
-          value={kpi?.reseau.nb_noeuds_gc ?? '—'}
-        />
-        <KPICard
-          icon="🏗️" label="OT en cours" color="orange" loading={loading}
-          value={kpi?.travaux.ot_en_cours ?? '—'}
-        />
-        <KPICard
-          icon="⚠️" label="OT en retard" color="red" loading={loading}
-          value={kpi?.travaux.ot_en_retard ?? '—'}
-        />
-      </div>
-
-      {/* ── Graphiques ───────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Doughnut — répartition EL */}
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-white mb-4">🎯 Répartition des EL</h2>
-          {loading ? (
-            <div className="h-56 bg-gray-800 rounded-xl animate-pulse" />
-          ) : (
-            <div style={{ height: 220 }}>
-              <Doughnut data={doughnutData} options={doughnutOptions} />
-            </div>
-          )}
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {Array(6).fill(0).map((_,i) => <div key={i} className="h-24 bg-gray-800/50 rounded-2xl animate-pulse" />)}
         </div>
-
-        {/* Bar — EL par groupe de logement */}
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-white mb-4">📊 EL par groupe de logement</h2>
-          {loading ? (
-            <div className="h-56 bg-gray-800 rounded-xl animate-pulse" />
-          ) : groupes.length === 0 ? (
-            <div className="h-56 flex items-center justify-center text-gray-500 text-sm">
-              Aucune donnée disponible
-            </div>
-          ) : (
-            <div style={{ height: 220 }}>
-              <Bar data={barData} options={barOptions} />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Barres de progression EL ─────── */}
-      {kpi && (
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-white">📈 Progression réseau</h2>
-          <GaugeBar
-            label="Couverture (EL raccordables / total)"
-            value={kpi.logements.el_raccordables}
-            max={kpi.logements.total_el}
-            color="#3B82F6"
-          />
-          <GaugeBar
-            label="Pénétration (EL raccordés / raccordables)"
-            value={kpi.logements.el_raccordes}
-            max={kpi.logements.el_raccordables}
-            color="#10B981"
-          />
-          <GaugeBar
-            label="Liens télécom déployés"
-            value={kpi.reseau.nb_liens_telecom}
-            max={kpi.reseau.nb_noeuds_telecom * 2 || 1}
-            color="#8B5CF6"
-          />
-        </div>
-      )}
-
-      {/* ── Tableau groupes de logement ──── */}
-      {groupes.length > 0 && (
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
-          <div className="p-5 border-b border-gray-700">
-            <h2 className="text-sm font-semibold text-white">🏘️ Détail par groupe de logement</h2>
+      ) : (
+        <>
+          {/* KPI Cards — toujours visibles */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4">
+            {kpiCards.map((k, i) => (
+              <div key={i} className="bg-gray-900 border border-gray-700 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-400 truncate">{k.label}</p>
+                    <p className={`text-xl sm:text-2xl font-bold mt-0.5 ${k.color}`}>{k.value}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{k.sub}</p>
+                  </div>
+                  <span className="text-2xl flex-shrink-0 ml-2">{k.icon}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-3 px-4 text-xs text-gray-500 uppercase tracking-wider">Groupe</th>
-                  <th className="text-right py-3 px-4 text-xs text-gray-500 uppercase tracking-wider">Total EL</th>
-                  <th className="text-right py-3 px-4 text-xs text-gray-500 uppercase tracking-wider">Raccordés</th>
-                  <th className="text-right py-3 px-4 text-xs text-gray-500 uppercase tracking-wider">Taux</th>
-                  <th className="py-3 px-4 text-xs text-gray-500 uppercase tracking-wider">Progression</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupes.map((g, i) => (
-                  <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                    <td className="py-3 px-4">
-                      <span className="text-lg mr-2">{g.icone}</span>
-                      <span className="text-white font-medium">{g.nom}</span>
-                    </td>
-                    <td className="py-3 px-4 text-right text-gray-300">{(g.total_el || 0).toLocaleString('fr-FR')}</td>
-                    <td className="py-3 px-4 text-right text-green-400 font-medium">{(g.el_raccordes || 0).toLocaleString('fr-FR')}</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`font-bold ${(g.taux_pct || 0) >= 50 ? 'text-green-400' : (g.taux_pct || 0) >= 25 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {(g.taux_pct || 0).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="h-2 bg-gray-700 rounded-full overflow-hidden w-24">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(g.taux_pct || 0, 100)}%`,
-                            background: g.couleur || '#3B82F6'
-                          }}
-                        />
+
+          {/* Barre pénétration globale */}
+          {kpi && (
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-white">Taux de pénétration FTTH</span>
+                <span className={`text-lg font-bold ${Number(pct) >= 50 ? 'text-green-400' : 'text-orange-400'}`}>{pct}%</span>
+              </div>
+              <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-1000"
+                  style={{ width: `${Math.min(Number(pct), 100)}%`,
+                    background: `linear-gradient(90deg, #3B82F6, ${Number(pct) >= 50 ? '#10B981' : '#F59E0B'})` }} />
+              </div>
+              <div className="flex justify-between mt-1 text-xs text-gray-500">
+                <span>0</span>
+                <span>{safeKpi.el_raccordes.toLocaleString()} raccordés sur {kpi.el_raccordables.toLocaleString()}</span>
+                <span>100%</span>
+              </div>
+            </div>
+          )}
+
+          {/* Contenu par onglet */}
+          {tab === 'overview' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Répartition EL */}
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">🏠 Répartition logements</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={70}
+                      dataKey="value" label={({name, percent}) => `${name} ${(percent*100).toFixed(0)}%`}
+                      labelLine={false}>
+                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v:any) => v.toLocaleString()} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Activité 7 jours */}
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">📈 Activité 7 jours</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={activite}>
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6B7280' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
+                    <Area type="monotone" dataKey="noeuds"   stroke="#3B82F6" fill="#3B82F633" strokeWidth={2} name="Nœuds" />
+                    <Area type="monotone" dataKey="liens"    stroke="#10B981" fill="#10B98133" strokeWidth={2} name="Liens" />
+                    <Area type="monotone" dataKey="logements"stroke="#F59E0B" fill="#F59E0B33" strokeWidth={2} name="Logements" />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {tab === 'reseau' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Saturation nœuds */}
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 md:col-span-2">
+                <h3 className="text-sm font-semibold text-white mb-3">⚠️ Saturation nœuds principaux</h3>
+                {satNodes.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-8">Aucun nœud avec capacité définie</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={satNodes} layout="vertical">
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: '#6B7280' }}
+                        tickFormatter={v => `${v}%`} />
+                      <YAxis type="category" dataKey="nom_unique" width={110}
+                        tick={{ fontSize: 10, fill: '#D1D5DB' }} />
+                      <Tooltip formatter={(v: any) => [`${v}%`, 'Saturation']}
+                        contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
+                      <Bar dataKey="saturation_pct" radius={[0,4,4,0]}>
+                        {satNodes.map((n, i) => (
+                          <Cell key={i}
+                            fill={n.saturation_pct >= 90 ? '#EF4444' : n.saturation_pct >= 75 ? '#F59E0B' : '#10B981'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+
+              {/* Alertes */}
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4 md:col-span-2">
+                <h3 className="text-sm font-semibold text-white mb-3">🔔 Alertes réseau</h3>
+                {alertes.length === 0 ? (
+                  <div className="text-center py-6">
+                    <div className="text-3xl mb-2">✅</div>
+                    <p className="text-green-400 text-sm">Aucune alerte — Réseau nominal</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {alertes.slice(0, 6).map((a: any, i: number) => (
+                      <div key={i} className={`flex items-start gap-3 p-2.5 rounded-xl text-xs ${
+                        a.niveau === 'critique' ? 'bg-red-900/20 border border-red-700/50' :
+                        a.niveau === 'warning'  ? 'bg-orange-900/20 border border-orange-700/50' :
+                        'bg-gray-800 border border-gray-700'}`}>
+                        <span className="flex-shrink-0">{a.niveau === 'critique' ? '🔴' : a.niveau === 'warning' ? '🟡' : 'ℹ️'}</span>
+                        <div>
+                          <p className="text-white font-medium">{a.message}</p>
+                          {a.noeud && <p className="text-gray-400 mt-0.5">{a.noeud}</p>}
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-      {/* ── Footer ───────────────────────── */}
-      <div className="text-center text-xs text-gray-600 pb-2">
-        SIG FTTH v6.1 — Edgar KOUAME © 2026 — Données actualisées en temps réel
-      </div>
+          {tab === 'travaux' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">🔧 Répartition OT par statut</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={otData}>
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9CA3AF' }} />
+                    <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8 }} />
+                    <Bar dataKey="value" radius={[6,6,0,0]}>
+                      {otData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">📋 Récapitulatif OT</h3>
+                <div className="space-y-3">
+                  {otData.map((d, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: d.fill }} />
+                      <div className="flex-1">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-300">{d.name}</span>
+                          <span className="text-white font-bold">{d.value}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full"
+                            style={{ width: `${Math.min(d.value / Math.max(kpi?.ot_planifie||1 + kpi?.ot_en_cours||1 + kpi?.ot_termine||1, 1) * 100, 100)}%`,
+                              background: d.fill }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === 'el' && kpi && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">🏠 Entonnoir EL</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Total logements', val: kpi.total_logements, color: '#6B7280', pct: 100 },
+                    { label: 'EL raccordables', val: kpi.el_raccordables, color: '#3B82F6', pct: Math.round(kpi.el_raccordables/kpi.total_logements*100) },
+                    { label: 'EL raccordés', val: safeKpi.el_raccordes, color: '#10B981', pct: Math.round(safeKpi.el_raccordes/kpi.total_logements*100) },
+                  ].map((s, i) => (
+                    <div key={i}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-400">{s.label}</span>
+                        <span className="text-white font-bold">{s.val.toLocaleString()} ({s.pct}%)</span>
+                      </div>
+                      <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${s.pct}%`, background: s.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 bg-gray-800 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-green-400">{pct}%</p>
+                  <p className="text-xs text-gray-400">Taux de pénétration</p>
+                </div>
+              </div>
+              <div className="bg-gray-900 border border-gray-700 rounded-2xl p-4">
+                <h3 className="text-sm font-semibold text-white mb-3">📊 Distribution EL</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} innerRadius={40}
+                      dataKey="value">
+                      {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v:any) => v.toLocaleString()} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

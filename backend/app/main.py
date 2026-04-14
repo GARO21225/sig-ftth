@@ -1,163 +1,147 @@
+"""SIG FTTH API v6.1 — Orange CI"""
+import logging
+import importlib
+import traceback
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from contextlib import asynccontextmanager
-import logging
 
-from app.core.config import settings
-from app.core.database import init_db
-from app.core.redis import init_redis
-
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s — %(levelname)s — %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+
+# ─── Startup ──────────────────────────────────────────────────────────────────
+_db_ready = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 SIG FTTH v6.1 démarrage Railway...")
-    logger.info(f"🌐 CORS: {settings.CORS_ORIGINS_LIST}")
-    try:
-        await init_db()
-    except Exception as e:
-        logger.error(f"❌ DB init: {e} — L'app continue")
-    try:
-        await init_redis()
-    except Exception as e:
-        logger.warning(f"⚠️ Redis ignoré: {e}")
-    logger.info("✅ Prêt !")
-    yield
-    logger.info("🛑 Arrêt...")
+    """App démarre immédiatement. DB s'initialise en arrière-plan."""
+    logger.info("🚀 SIG FTTH v6.1 — démarrage")
 
-app = FastAPI(
-    title="SIG FTTH API",
-    description="API SIG Web FTTH v6.1",
-    version="6.1.0",
-    lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
+    async def _init():
+        global _db_ready
+        try:
+            from app.core.database import init_db
+            await init_db()
+            _db_ready = True
+            logger.info("✅ DB prête")
+        except Exception as e:
+            logger.error(f"❌ DB: {e}")
+        try:
+            from app.core.redis import init_redis
+            await init_redis()
+        except Exception as e:
+            logger.warning(f"⚠️ Redis: {e}")
+
+    # Lance l'init sans bloquer — app écoute IMMÉDIATEMENT
+    loop = asyncio.get_event_loop()
+    loop.create_task(_init())
+
+    yield  # App prête et en écoute
+
+    logger.info("🛑 Arrêt")
+
+# ─── App ──────────────────────────────────────────────────────────────────────
+app = FastAPI(title="SIG FTTH API", version="6.1.0", lifespan=lifespan,
+              docs_url="/docs", redoc_url="/redoc")
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# CORS — toujours en premier
+try:
+    from app.core.config import settings
+    origins = settings.CORS_ORIGINS_LIST
+except Exception:
+    origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS_LIST,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    # BUG #5 FIX — expose_headers complet
-    expose_headers=[
-        "Content-Disposition",
-        "Content-Range",
-        "X-Total-Count",
-        "X-Request-Id",
-    ],
+    expose_headers=["Content-Disposition", "Content-Range", "X-Total-Count"],
 )
 
-# ─── Routes Auth ────────────────────────────
-from app.api import auth
-app.include_router(auth.router, prefix="/auth", tags=["🔐 Auth"])
+# ─── Routes ───────────────────────────────────────────────────────────────────
+_loaded_modules = []
+_failed_modules = []
 
-# ─── Routes Dashboard ───────────────────────
-from app.api import dashboard
-app.include_router(dashboard.router, prefix="/api/v1", tags=["📊 Dashboard"])
+_ROUTES = [
+    ("app.api.auth",            "router",       "/auth"),
+    ("app.api.dashboard",       "router",       "/api/v1"),
+    ("app.api.export",          "router",       "/api/v1"),
+    ("app.api.noeuds_telecom",  "router",       "/api/v1"),
+    ("app.api.liens_telecom",   "router",       "/api/v1"),
+    ("app.api.noeuds_gc",       "router",       "/api/v1"),
+    ("app.api.liens_gc",        "router",       "/api/v1"),
+    ("app.api.logements",       "router",       "/api/v1"),
+    ("app.api.travaux",         "router",       "/api/v1"),
+    ("app.api.eligibilite",     "router",       "/api/v1"),
+    ("app.api.websocket",       "router",       ""),
+    ("app.api.zones_influence", "router",       "/api/v1"),
+    ("app.api.itineraires",     "router",       "/api/v1"),
+    ("app.api.import_dwg",      "router",       "/api/v1"),
+    ("app.api.analytics",       "router",       "/api/v1"),
+    ("app.api.catalogue",       "router",       "/api/v1"),
+]
 
-# ─── Routes Export ──────────────────────────
-from app.api import export
-app.include_router(export.router, prefix="/api/v1", tags=["📤 Export"])
+for _mod_path, _attr, _prefix in _ROUTES:
+    try:
+        _mod = importlib.import_module(_mod_path)
+        _router = getattr(_mod, _attr, None)
+        if _router:
+            if _prefix:
+                app.include_router(_router, prefix=_prefix)
+            else:
+                app.include_router(_router)
+            _loaded_modules.append(_mod_path.split(".")[-1])
+    except Exception as _e:
+        _failed_modules.append(_mod_path.split(".")[-1])
+        logger.error(f"❌ {_mod_path}: {_e}\n{traceback.format_exc()}")
 
-# ─── Routes Réseau Télécom ──────────────────
-from app.api import noeuds_telecom
-app.include_router(noeuds_telecom.router, prefix="/api/v1", tags=["📡 Nœuds Télécom"])
-
-from app.api import liens_telecom
-app.include_router(liens_telecom.router, prefix="/api/v1", tags=["〰️ Liens Télécom"])
-
-# ─── Routes Génie Civil ─────────────────────
-# BUG #6 FIX — importer noeuds_gc corrigé (préfixe /noeuds-gc)
-from app.api import noeuds_gc
-app.include_router(noeuds_gc.router, prefix="/api/v1", tags=["🏗️ Nœuds GC"])
-
-from app.api import liens_gc
-app.include_router(liens_gc.router, prefix="/api/v1", tags=["⚡ Liens GC"])
-
-# ─── Routes Logements ───────────────────────
-from app.api import logements
-app.include_router(logements.router, prefix="/api/v1", tags=["🏠 Logements"])
-
-# ─── Routes Travaux ─────────────────────────
-from app.api import travaux
-app.include_router(travaux.router, prefix="/api/v1", tags=["🏗️ Travaux"])
-
-# ─── Routes Éligibilité ─────────────────────
-from app.api import eligibilite
-app.include_router(eligibilite.router, prefix="/api/v1", tags=["📡 Éligibilité"])
-
-# ─── WebSocket ──────────────────────────────
-from app.api import websocket
-app.include_router(websocket.router, tags=["🔌 WebSocket"])
-
-# ─── Modules stubs (import protégé) ─────────
-import importlib
-# ─── Zones d'influence ─────────────────────
-from app.api import zones_influence
-app.include_router(zones_influence.router, prefix="/api/v1", tags=["🗺️ Zones d'influence"])
-
-# ─── Itinéraires ────────────────────────────
-from app.api import itineraires
-app.include_router(itineraires.router, prefix="/api/v1", tags=["🧭 Itinéraires"])
-
-# ─── Import DWG ─────────────────────────────
-from app.api import import_dwg
-app.include_router(import_dwg.router, prefix="/api/v1", tags=["📥 Import DWG"])
-
-# ─── Équipements (CRUD complet + QR + photos) ──
-from app.api import equipements
-app.include_router(equipements.equip_router, prefix="/api/v1", tags=["📦 Équipements"])
-
-# ─── Analytics (heatmap, prédictions, PDF) ──
-from app.api import analytics
-app.include_router(analytics.router, prefix="/api/v1", tags=["📈 Analytics"])
-
-# ─── API Publique + clés ─────────────────────
-from app.api import api_publique
-app.include_router(api_publique.router, prefix="/api/v1", tags=["🔌 API Publique"])
-app.include_router(api_publique.admin_router, prefix="/api/v1", tags=["🔑 Gestion clés API"])
-
-# ─── Modules stubs (import protégé) ─────────
-for mod_name, prefix, tags in [
-    ("app.api.catalogue", "/api/v1", ["📋 Catalogue"]),
+# Modules spéciaux
+for _mod_path, _attrs, _prefix in [
+    ("app.api.equipements",  ["equip_router"], "/api/v1"),
+    ("app.api.api_publique", ["router", "admin_router"], "/api/v1"),
 ]:
     try:
-        mod = importlib.import_module(mod_name)
-        app.include_router(mod.router, prefix=prefix, tags=tags)
-    except Exception as e:
-        logger.warning(f"⚠️ {mod_name} ignoré: {e}")
+        _mod = importlib.import_module(_mod_path)
+        for _attr in _attrs:
+            _r = getattr(_mod, _attr, None)
+            if _r:
+                app.include_router(_r, prefix=_prefix)
+        _loaded_modules.append(_mod_path.split(".")[-1])
+    except Exception as _e:
+        _failed_modules.append(_mod_path.split(".")[-1])
+        logger.error(f"❌ {_mod_path}: {_e}")
 
-# ─── BUG #3 FIX — UNE SEULE route /health ──
-@app.get("/health", tags=["⚙️ Système"])
+logger.info(f"📦 {len(_loaded_modules)} modules OK | {len(_failed_modules)} en erreur: {_failed_modules}")
+
+# ─── Health ───────────────────────────────────────────────────────────────────
+@app.get("/health")
 async def health():
-    from app.core.database import _pool
-    db_ok = False
-    try:
-        if _pool:
-            async with _pool.acquire() as conn:
-                await conn.execute("SELECT 1")
-            db_ok = True
-    except Exception as e:
-        logger.warning(f"DB health check: {e}")
+    db_status = "initializing"
+    if _db_ready:
+        try:
+            from app.core.database import _pool
+            if _pool:
+                async with _pool.acquire() as conn:
+                    await conn.execute("SELECT 1")
+                db_status = "connected"
+            else:
+                db_status = "no_pool"
+        except Exception as e:
+            db_status = f"error: {str(e)[:50]}"
     return {
-        "status": "ok" if db_ok else "degraded",
-        "app": settings.APP_NAME,
-        "version": settings.VERSION,
-        "database": "connected" if db_ok else "error",
-        "environment": "production",
-        "redis": "disabled",
+        "status": "ok",
+        "db": db_status,
+        "modules": len(_loaded_modules),
+        "failed": _failed_modules,
+        "version": "6.1.0",
     }
 
-@app.get("/", tags=["⚙️ Système"])
+@app.get("/")
 async def root():
-    return {
-        "message": "SIG FTTH API v6.1",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    return {"message": "SIG FTTH API v6.1", "docs": "/docs", "health": "/health"}

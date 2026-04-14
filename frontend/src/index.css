@@ -83,3 +83,22 @@ button, a {
   right: 0; bottom: 0;
   z-index: 1000;
 }
+
+/* === MOBILE CRITICAL === */
+input, select, textarea, button {
+  font-size: max(16px, 1rem) !important; /* Prevent iOS auto-zoom on input focus */
+}
+
+/* Leaflet touch optimized */
+.leaflet-container {
+  -webkit-overflow-scrolling: touch;
+}
+.leaflet-control-zoom {
+  display: none !important; /* Use custom zoom buttons */
+}
+
+/* Full height fix for mobile browsers (address bar) */
+html, body, #root {
+  height: 100%;
+  height: 100dvh;
+}

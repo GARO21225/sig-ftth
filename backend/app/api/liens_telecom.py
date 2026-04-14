@@ -84,7 +84,12 @@ async def liens_telecom_geojson(
                 json_build_object(
                     'type', 'Feature',
                     'geometry',
-                        ST_AsGeoJSON(lt.geom)::json,
+                        ST_AsGeoJSON(
+                            COALESCE(
+                                lt.geom,
+                                ST_MakeLine(nd.geom, na.geom)
+                            )
+                        )::json,
                     'properties', json_build_object(
                         'id', lt.id,
                         'nom_unique', lt.nom_unique,
@@ -109,6 +114,7 @@ async def liens_telecom_geojson(
         JOIN noeud_telecom na
             ON na.id = lt.id_noeud_arrivee
         WHERE lt.geom IS NOT NULL
+           OR (nd.geom IS NOT NULL AND na.geom IS NOT NULL)
     """)
     return row['geojson']
 

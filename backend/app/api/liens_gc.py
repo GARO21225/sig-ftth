@@ -89,7 +89,12 @@ async def liens_gc_geojson(
                 json_build_object(
                     'type', 'Feature',
                     'geometry',
-                        ST_AsGeoJSON(lg.geom)::json,
+                        ST_AsGeoJSON(
+                            COALESCE(
+                                lg.geom,
+                                ST_MakeLine(nd.geom, na.geom)
+                            )
+                        )::json,
                     'properties', json_build_object(
                         'id', lg.id,
                         'nom_unique', lg.nom_unique,
@@ -113,6 +118,7 @@ async def liens_gc_geojson(
         JOIN noeud_gc na
             ON na.id = lg.id_noeud_arrivee
         WHERE lg.geom IS NOT NULL
+           OR (nd.geom IS NOT NULL AND na.geom IS NOT NULL)
     """)
     return row['geojson']
 

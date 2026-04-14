@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PanneauCreerLien, PanneauZones, PanneauItineraires } from './MapPage_liens_zones'
 import {
-  MapContainer, TileLayer, Marker, Polyline,
+  MapContainer, TileLayer, Marker, Polyline, Polygon,
   Popup, useMap, useMapEvents,
 } from 'react-leaflet'
 import L from 'leaflet'
@@ -66,6 +66,11 @@ export default function MapPage() {
   const [showZones,      setShowZones]      = useState(false)
   const [showItineraires,setShowItineraires]= useState(false)
   const [showSaturation, setShowSaturation] = useState(false)
+  const [routeGeoJSON,   setRouteGeoJSON]   = useState<any>(null)
+  const [drawingCable,   setDrawingCable]   = useState(false)
+  const [cablePoints,    setCablePoints]    = useState<[number,number][]>([])
+  const [cableType,      setCableType]      = useState<'lien_telecom'|'lien_gc'>('lien_telecom')
+  const [showCableForm,  setShowCableForm]  = useState(false)
   const [saturationData, setSaturationData] = useState<any[]>([])
 
   const { layers, toggleLayer, mapStyle, setMapStyle } = useMapStore()
@@ -181,6 +186,7 @@ export default function MapPage() {
         <TileLayer url={tileUrl} attribution="CartoDB / OSM" maxZoom={20} />
         <ZoomControl />
         {editMode && <MapClickHandler onMapClick={setDraftPoint} />}
+        {drawingCable && !editMode && <CableClickHandler onPoint={pt => setCablePoints(ps => [...ps, pt])} />}
 
         {layers.noeud_telecom && noeuds.map(n => (
           <Marker key={n.id} position={[n.latitude, n.longitude]} icon={ICONS[n.type_noeud] || ICONS.PBO}
@@ -203,33 +209,84 @@ export default function MapPage() {
           </Marker>
         ))}
 
-        {layers.lien_telecom && liens.map(l => l.geom?.coordinates
+        {layers.lien_telecom && liens.map(l => l.geom?.coordinates?.length > 0
           ? <LienLayer key={l.id} lien={l} color="#378ADD" onClick={() => setSelected({ ...l, _type: 'lien_telecom' })} />
           : null)}
 
-        {layers.lien_gc && liensGC.map(l => l.geom?.coordinates
+        {layers.lien_gc && liensGC.map(l => l.geom?.coordinates?.length > 0
           ? <LienLayer key={l.id} lien={l} color="#F59E0B" dash="8,4" onClick={() => setSelected({ ...l, _type: 'lien_gc' })} />
           : null)}
 
-        {zonesData.map((zone: any) => {
-          if (!zone.geom?.coordinates) return null
-          const coords = zone.geom.coordinates[0]?.map(([lng, lat]: number[]) => [lat, lng] as [number, number])
-          if (!coords) return null
+        {layers.zones && zonesData.map((zone: any) => {
+          // geom peut être un objet GeoJSON {type,coordinates} ou null
+          const geomObj = zone.geom || zone.geom_json
+          if (!geomObj?.coordinates) return null
+          const rings = geomObj.coordinates
+          if (!rings || !rings[0]) return null
+          const outerRing = rings[0]
+          const coords: [number,number][] = outerRing.map((pt: number[]) => [pt[1], pt[0]] as [number,number])
+          if (coords.length < 3) return null
+          const col = zone.type_zone === 'prioritaire' ? '#10B981' : zone.type_zone === 'exclusion' ? '#EF4444' : zone.type_zone === 'gc' ? '#F59E0B' : '#3B82F6'
           return (
-            <Polyline key={zone.id} positions={coords}
-              pathOptions={{ color: '#1D9E75', weight: 2, opacity: 0.8, fillColor: '#1D9E75', fillOpacity: 0.08, fill: true }}>
+            <Polygon key={zone.id} positions={coords}
+              pathOptions={{ color: col, weight: 2.5, opacity: 0.9, fillColor: col, fillOpacity: 0.12 }}>
               <Popup>
-                <div style={{ minWidth: 160 }}>
-                  <div style={{ fontWeight: 'bold', fontSize: 13 }}>Zone : {zone.nom}</div>
-                  <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
-                    <div>Type : {zone.type_zone}</div>
-                    <div>Clients : {zone.nb_clients_actifs || 0}</div>
+                <div style={{ minWidth: 180 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: 13, color: col }}>📍 {zone.nom}</div>
+                  <div style={{ fontSize: 11, color: '#666', marginTop: 4, lineHeight: 1.6 }}>
+                    <div>Type : <b>{zone.type_zone}</b></div>
+                    <div>Clients actifs : <b>{zone.nb_clients_actifs || 0}</b></div>
+                    <div>Logements : <b>{zone.nb_logements || 0}</b></div>
+                    {zone.capacite_max && <div>Capacité max : <b>{zone.capacite_max}</b></div>}
                   </div>
                 </div>
               </Popup>
-            </Polyline>
+            </Polygon>
           )
         })}
+
+        {/* Route itinéraire */}
+        {routeGeoJSON && routeGeoJSON.features?.map((feat: any, i: number) => {
+          if (!feat.geometry) return null
+          const col = feat.properties?.couleur || '#3B82F6'
+          if (feat.geometry.type === 'LineString') {
+            const pos = feat.geometry.coordinates.map(([lng,lat]: number[]) => [lat,lng] as [number,number])
+            const isDashed = feat.properties?.type === 'route_directe'
+            return (
+              <Polyline key={`route-${i}`} positions={pos}
+                pathOptions={{ color: col, weight: feat.properties?.type === 'fibre' ? 3 : 5,
+                  opacity: feat.properties?.type === 'fibre' ? 0.6 : 0.9,
+                  dashArray: isDashed ? '10,8' : undefined }} />
+            )
+          }
+          return null
+        })}
+
+        {/* Points départ/arrivée de l'itinéraire */}
+        {routeGeoJSON && routeGeoJSON.features?.filter((f:any) =>
+          f.geometry?.type === 'Point' && ['depart','arrivee'].includes(f.properties?.type)
+        ).map((feat: any, i: number) => {
+          const [lng, lat] = feat.geometry.coordinates
+          const isDepart = feat.properties.type === 'depart'
+          const icon = L.divIcon({
+            html: `<div style="background:${isDepart?'#22C55E':'#EF4444'};width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
+            className:'', iconSize:[16,16], iconAnchor:[8,8]
+          })
+          return <Marker key={`iti-pt-${i}`} position={[lat,lng]} icon={icon} />
+        })}
+
+        {/* Dessin de câble en cours */}
+        {drawingCable && cablePoints.length >= 2 && (
+          <Polyline positions={cablePoints}
+            pathOptions={{ color: cableType==='lien_telecom' ? '#378ADD' : '#F59E0B',
+              weight:3, opacity:0.8, dashArray:'8,4' }} />
+        )}
+        {drawingCable && cablePoints.map((pt, i) => (
+          <Marker key={`cp-${i}`} position={pt} icon={L.divIcon({
+            html:`<div style="background:${cableType==='lien_telecom'?'#378ADD':'#F59E0B'};width:10px;height:10px;border-radius:50%;border:2px solid white"></div>`,
+            className:'', iconSize:[10,10], iconAnchor:[5,5]
+          })} />
+        ))}
 
         {showSaturation && saturationData.map((n: any) => (
           <Marker key={'sat-'+n.id} position={[n.latitude, n.longitude]}
@@ -306,6 +363,7 @@ export default function MapPage() {
               { key: 'noeud_gc',      label: 'Noeuds GC',       icon: '🏗️', count: noeudsGC.length,  err: errors.includes('noeuds-gc') },
               { key: 'lien_telecom',  label: 'Cables Optiques', icon: '〰️', count: liens.length,     err: errors.includes('liens-telecom') },
               { key: 'lien_gc',       label: 'Fourreaux GC',    icon: '⚡', count: liensGC.length,   err: errors.includes('liens-gc') },
+              { key: 'zones',         label: 'Zones influence',  icon: '🗺️', count: zonesData.length,  err: false },
               { key: 'logement',      label: 'Logements',       icon: '🏠', count: logements.length, err: errors.includes('logements') },
             ].map(layer => (
               <button key={layer.key} onClick={() => toggleLayer(layer.key)}
@@ -467,8 +525,68 @@ export default function MapPage() {
           onClose={() => setShowLienForm(null)}
           onSaved={() => { setShowLienForm(null); chargerDonnees() }} />
       )}
-      {showZones && <PanneauZones onClose={() => setShowZones(false)} />}
-      {showItineraires && <PanneauItineraires onClose={() => setShowItineraires(false)} />}
+      {showZones && <PanneauZones onClose={() => { setShowZones(false); chargerDonnees() }} />}
+      {showItineraires && <PanneauItineraires onClose={() => setShowItineraires(false)} onRoute={gj => setRouteGeoJSON(gj)} />}
+
+      {/* TOOLBAR DIGITALISATION CÂBLE */}
+      {canEdit && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 pb-safe">
+          {!drawingCable ? (
+            <div className="flex gap-2 flex-wrap justify-center">
+              <button onClick={() => { setCableType('lien_telecom'); setDrawingCable(true); setCablePoints([]); toast('🖊️ Cliquez sur la carte pour tracer le câble') }}
+                className="px-3 py-2 bg-blue-600/90 hover:bg-blue-500 text-white text-xs font-medium rounded-xl shadow-lg backdrop-blur-sm flex items-center gap-1.5">
+                ✏️ Câble télécom
+              </button>
+              <button onClick={() => { setCableType('lien_gc'); setDrawingCable(true); setCablePoints([]); toast('🖊️ Cliquez pour tracer le fourreau GC') }}
+                className="px-3 py-2 bg-yellow-600/90 hover:bg-yellow-500 text-white text-xs font-medium rounded-xl shadow-lg backdrop-blur-sm flex items-center gap-1.5">
+                ✏️ Fourreau GC
+              </button>
+              {routeGeoJSON && (
+                <button onClick={() => setRouteGeoJSON(null)}
+                  className="px-2 py-2 bg-gray-700/90 hover:bg-gray-600 text-gray-300 text-xs rounded-xl shadow-lg backdrop-blur-sm">
+                  ✕ Effacer route
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-gray-900/95 border border-gray-600 rounded-2xl px-3 py-2 shadow-xl backdrop-blur-sm">
+              <div className="w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0"
+                style={{background: cableType==='lien_telecom'?'#378ADD':'#F59E0B'}} />
+              <span className="text-xs text-white font-medium whitespace-nowrap">
+                {cablePoints.length === 0 ? '1er point: cliquez sur la carte' :
+                 cablePoints.length === 1 ? '1 point — tracez la suite' :
+                 `${cablePoints.length} points tracés`}
+              </span>
+              {cablePoints.length >= 2 && (
+                <button onClick={() => setShowCableForm(true)}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-xl font-bold">
+                  ✅ Sauvegarder
+                </button>
+              )}
+              {cablePoints.length > 0 && (
+                <button onClick={() => setCablePoints(ps => ps.slice(0,-1))}
+                  className="px-2 py-1.5 bg-gray-700 text-gray-300 text-xs rounded-xl">
+                  ↩
+                </button>
+              )}
+              <button onClick={() => { setDrawingCable(false); setCablePoints([]) }}
+                className="px-2 py-1.5 bg-red-900/50 text-red-400 text-xs rounded-xl hover:bg-red-800/50">
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL SAUVEGARDE CÂBLE DIGITALISÉ */}
+      {showCableForm && (
+        <CableForm
+          points={cablePoints} type={cableType}
+          noeuds={noeuds} noeudsGC={noeudsGC}
+          onSaved={() => { setShowCableForm(false); setDrawingCable(false); setCablePoints([]); chargerDonnees() }}
+          onClose={() => setShowCableForm(false)}
+        />
+      )}
 
       {loading && (
         <div className="absolute inset-0 z-[2000] bg-gray-950/80 backdrop-blur-sm flex items-center justify-center">
@@ -484,6 +602,11 @@ export default function MapPage() {
 
 function MapClickHandler({ onMapClick }: { onMapClick: (pos: [number,number]) => void }) {
   useMapEvents({ click(e) { onMapClick([e.latlng.lat, e.latlng.lng]) } })
+  return null
+}
+
+function CableClickHandler({ onPoint }: { onPoint: (p:[number,number]) => void }) {
+  useMapEvents({ click(e) { onPoint([e.latlng.lat, e.latlng.lng]) } })
   return null
 }
 
@@ -547,6 +670,164 @@ function PopupLogement({ logement, onDelete }: { logement: any; onDelete?: (item
 }
 
 function LienLayer({ lien, color, dash, onClick }: { lien: any; color: string; dash?: string; onClick: () => void }) {
-  const coords: [number,number][] = lien.geom.coordinates.map(([lng, lat]: number[]) => [lat, lng])
+  const geom = lien.geom
+  if (!geom?.coordinates) return null
+  
+  if (geom.type === 'MultiLineString') {
+    return (
+      <>
+        {geom.coordinates.map((line: number[][], i: number) => {
+          const coords = line.map(([lng, lat]) => [lat, lng] as [number,number])
+          return <Polyline key={i} positions={coords}
+            pathOptions={{ color, weight: 3, opacity: 0.85, dashArray: dash }}
+            eventHandlers={{ click: onClick }} />
+        })}
+      </>
+    )
+  }
+  // LineString
+  const coords: [number,number][] = geom.coordinates.map(([lng, lat]: number[]) => [lat, lng])
   return <Polyline positions={coords} pathOptions={{ color, weight: 3, opacity: 0.85, dashArray: dash }} eventHandlers={{ click: onClick }} />
+}
+
+
+// ─── CableForm — Sauvegarde d'un câble digitalisé ────────────────────────
+function CableForm({ points, type, noeuds, noeudsGC, onSaved, onClose }: {
+  points: [number,number][]; type: 'lien_telecom'|'lien_gc'
+  noeuds: any[]; noeudsGC: any[]
+  onSaved: () => void; onClose: () => void
+}) {
+  const [form, setForm] = useState({
+    nom_unique: '', type_lien: type === 'lien_telecom' ? 'branchement' : 'fourreau',
+    type_cable: 'monomode', nb_fibres: 4, nb_fourreaux: 4, etat: 'actif',
+    id_noeud_depart: '', id_noeud_arrivee: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const liste = type === 'lien_telecom' ? noeuds : noeudsGC
+  const isTelecom = type === 'lien_telecom'
+
+  // Calculer longueur approximative
+  const longueur = points.reduce((total, pt, i) => {
+    if (i === 0) return 0
+    const prev = points[i-1]
+    const R = 6371000
+    const dLat = (pt[0] - prev[0]) * Math.PI / 180
+    const dLng = (pt[1] - prev[1]) * Math.PI / 180
+    const a = Math.sin(dLat/2)**2 + Math.cos(prev[0]*Math.PI/180)*Math.cos(pt[0]*Math.PI/180)*Math.sin(dLng/2)**2
+    return total + R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  }, 0)
+
+  const sauvegarder = async () => {
+    if (!form.nom_unique) return toast.error('Nom unique requis')
+    setSaving(true)
+    const coordinates = points.map(([lat, lng]) => [lng, lat])
+    const payload: any = {
+      nom_unique: form.nom_unique,
+      type_lien: form.type_lien,
+      etat: form.etat,
+      id_noeud_depart: form.id_noeud_depart || undefined,
+      id_noeud_arrivee: form.id_noeud_arrivee || undefined,
+      coordinates,
+    }
+    if (isTelecom) { payload.type_cable = form.type_cable; payload.nb_fibres = form.nb_fibres }
+    else { payload.nb_fourreaux = form.nb_fourreaux }
+    try {
+      await api.post(isTelecom ? '/liens-telecom' : '/liens-gc', payload)
+      toast.success(`${form.nom_unique} — ${Math.round(longueur)}m digitalisé ✅`)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Erreur sauvegarde')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[2000] bg-black/70 flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-white text-sm">
+              {isTelecom ? '〰️ Câble optique digitalisé' : '⚡ Fourreau GC digitalisé'}
+            </h2>
+            <p className="text-xs text-gray-400">
+              {points.length} points · ~{Math.round(longueur)}m
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-xl">✕</button>
+        </div>
+        <div className="p-4 space-y-3">
+          {/* Aperçu tracé */}
+          <div className="bg-gray-800 rounded-xl p-2.5 flex items-center gap-2">
+            <div className="flex-1 h-1 rounded-full" style={{background: `linear-gradient(90deg, #22C55E, ${isTelecom?'#378ADD':'#F59E0B'}, #EF4444)`}} />
+            <span className="text-xs text-gray-400">{points.length} pts</span>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Nom unique *</label>
+            <input value={form.nom_unique} onChange={e => setForm(f => ({...f, nom_unique: e.target.value}))}
+              placeholder={isTelecom ? "ex: LT-NRO01-PBO042" : "ex: LGC-CH01-CH02"}
+              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none focus:border-blue-500" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Type lien</label>
+              <select value={form.type_lien} onChange={e => setForm(f => ({...f, type_lien: e.target.value}))}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-xs outline-none">
+                {isTelecom
+                  ? ['transport','distribution','branchement','jarretiere'].map(t => <option key={t} value={t}>{t}</option>)
+                  : ['fourreau','aerien','micro_tranchee','chemin_cables'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            {isTelecom ? (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Nb fibres</label>
+                <input type="number" min={2} max={1728} value={form.nb_fibres}
+                  onChange={e => setForm(f => ({...f, nb_fibres: parseInt(e.target.value)||4}))}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Nb fourreaux</label>
+                <input type="number" min={1} value={form.nb_fourreaux}
+                  onChange={e => setForm(f => ({...f, nb_fourreaux: parseInt(e.target.value)||4}))}
+                  className="w-full bg-gray-800 border border-gray-600 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+              </div>
+            )}
+          </div>
+
+          {/* Nœuds optionnels */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Nœud départ (opt.)</label>
+              <select value={form.id_noeud_depart} onChange={e => setForm(f => ({...f, id_noeud_depart: e.target.value}))}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-2 py-2 text-white text-xs outline-none">
+                <option value="">— Sélectionner —</option>
+                {liste.slice(0,30).map((n: any) => <option key={n.id} value={n.id}>{n.nom_unique}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Nœud arrivée (opt.)</label>
+              <select value={form.id_noeud_arrivee} onChange={e => setForm(f => ({...f, id_noeud_arrivee: e.target.value}))}
+                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-2 py-2 text-white text-xs outline-none">
+                <option value="">— Sélectionner —</option>
+                {liste.filter((n: any) => n.id !== form.id_noeud_depart).slice(0,30).map((n: any) =>
+                  <option key={n.id} value={n.id}>{n.nom_unique}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-600 text-gray-300 rounded-xl text-sm">
+              Annuler
+            </button>
+            <button onClick={sauvegarder} disabled={saving || !form.nom_unique}
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-sm font-bold">
+              {saving ? '⏳...' : `✅ Sauvegarder ~${Math.round(longueur)}m`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
