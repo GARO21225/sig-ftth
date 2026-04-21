@@ -53,6 +53,7 @@ class Settings(BaseSettings):
         defaults = [
             "https://garo21225.github.io",
             "https://sig-ftth.netlify.app",
+            "https://sig-ftth.pages.dev",
             "https://sig-ftth-production-a3aa.up.railway.app",
             "http://localhost:3000",
             "http://localhost:5173",
