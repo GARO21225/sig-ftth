@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>SIG FTTH</title>
+  <script>
+    // SPA GitHub Pages fix — sauvegarde l'URL et redirige vers index.html
+    var base = '/sig-ftth';
+    var path = window.location.pathname;
+    var search = window.location.search;
+    var hash = window.location.hash;
+
+    // Construire l'URL relative à partir de /sig-ftth/
+    var relative = path.replace(base, '') || '/';
+    var full = relative + (search || '') + (hash || '');
+
+    // Sauvegarder dans sessionStorage
+    sessionStorage.setItem('spa-redirect', full);
+
+    // Rediriger vers la racine GitHub Pages
+    window.location.replace(base + '/');
+  </script>
+  <style>
+    body { font-family: sans-serif; background: #030712; color: #9ca3af;
+           display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    p { text-align: center; }
+  </style>
+</head>
+<body>
+  <p>Chargement SIG FTTH...</p>
+</body>
+</html>
