@@ -42,3 +42,5 @@ Pillow==10.3.0
 
 # IA / Fuzzy matching
 rapidfuzz==3.6.1
+
+
